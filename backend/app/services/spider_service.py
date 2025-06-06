@@ -50,7 +50,7 @@ class SpiderService:
                 id=str(uuid.uuid4()),
                 name=spider.name,
                 start_urls=spider.start_urls,
-                blocks=json.loads(json.dumps(spider.blocks, default=lambda o: o.dict())),
+                blocks=json.loads(json.dumps(spider.blocks, default=lambda o: o.model_dump())),
                 settings=spider.settings or {},
                 created_at=datetime.datetime.now(),
                 status="idle"
@@ -83,7 +83,7 @@ class SpiderService:
             # Update the spider fields
             db_spider.name = spider.name
             db_spider.start_urls = spider.start_urls
-            db_spider.blocks = json.loads(json.dumps(spider.blocks, default=lambda o: o.dict()))
+            db_spider.blocks = json.loads(json.dumps(spider.blocks, default=lambda o: o.model_dump()))
             db_spider.settings = spider.settings or {}
             db_spider.updated_at = datetime.datetime.now()
 
@@ -486,7 +486,7 @@ class {name.capitalize()}Spider(scrapy.Spider):
                     block_map[block["id"]] = block
                 else:
                     # Assuming it's a Pydantic model, convert to dict
-                    block_dict = block.dict() if hasattr(block, "dict") else vars(block)
+                    block_dict = block.model_dump() if hasattr(block, "model_dump") else vars(block)
                     block_map[block_dict["id"]] = block_dict
 
         # Find the starting blocks (blocks that are not referenced in any 'next' parameter)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Optional, Any, Union
 from datetime import datetime
 import uuid
@@ -8,12 +8,16 @@ class BlockBase(BaseModel):
     type: str
     params: Dict[str, Any]
 
+    model_config = ConfigDict(extra="allow")
+
 class SpiderConfig(BaseModel):
     """Base schema for spider configuration"""
     name: str
     start_urls: List[str]
     blocks: List[BlockBase]
     settings: Optional[Dict[str, Any]] = {}
+
+    model_config = ConfigDict(from_attributes=True)
 
 class SpiderCreate(SpiderConfig):
     """Schema for creating a new spider"""
@@ -29,9 +33,7 @@ class SpiderRead(SpiderConfig):
     created_at: datetime
     updated_at: Optional[datetime] = None
     status: Optional[str] = "idle"
-
-    class Config:
-        orm_mode = True
+    # model_config already defined in SpiderConfig parent class with from_attributes=True
 
 class SpiderStatus(BaseModel):
     """Schema for spider execution status updates"""
@@ -41,3 +43,5 @@ class SpiderStatus(BaseModel):
     items_scraped: Optional[int] = 0
     error_message: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.now)
+
+    model_config = ConfigDict(from_attributes=True)
