@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Grid,
-  Paper,
   Typography,
   Card,
   CardContent,
-  CardHeader,
   List,
   ListItem,
   ListItemText,
@@ -14,10 +12,10 @@ import {
   Chip,
   IconButton,
   Button,
-  Stack,
   LinearProgress,
   useMediaQuery,
-  useTheme
+  useTheme,
+  CircularProgress
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import CodeIcon from '@mui/icons-material/Code';
@@ -28,6 +26,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { getDashboardStats, getRecentJobs } from '../services/api';
 
 // This would be replaced with actual API calls in a real implementation
 const mockStats = {
@@ -54,18 +53,44 @@ const statusColors = {
 const Dashboard = () => {
   const [stats, setStats] = useState(mockStats);
   const [recentJobs, setRecentJobs] = useState(mockRecentJobs);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const theme = useTheme();
   const isXsScreen = useMediaQuery(theme.breakpoints.only('xs'));
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // In a real implementation, this would fetch data from the API
-  useEffect(() => {
-    // Fetch dashboard stats
-    // api.getStats().then(setStats);
+  const fetchDashboardData = async () => {
+    try {
+      setRefreshing(true);
+      const statsData = await getDashboardStats();
+      setStats(statsData);
 
-    // Fetch recent jobs
-    // api.getRecentJobs().then(setRecentJobs);
+      const jobsData = await getRecentJobs(5);
+      setRecentJobs(jobsData);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
+
+  const handleRefresh = () => {
+    fetchDashboardData();
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <div>
@@ -307,8 +332,12 @@ const Dashboard = () => {
           <Typography variant={isSmallScreen ? "subtitle1" : "h6"} component="h2">
             Recent Jobs
           </Typography>
-          <IconButton size="small">
-            <RefreshIcon fontSize="small" />
+          <IconButton size="small" onClick={handleRefresh}>
+            {refreshing ? (
+              <CircularProgress size={24} />
+            ) : (
+              <RefreshIcon fontSize="small" />
+            )}
           </IconButton>
         </Box>
 
@@ -340,7 +369,6 @@ const Dashboard = () => {
                   primary={
                     <Box sx={{
                       display: 'flex',
-                      alignItems: 'center',
                       mb: 0.5,
                       flexDirection: isXsScreen ? 'column' : 'row',
                       alignItems: isXsScreen ? 'flex-start' : 'center',
@@ -390,18 +418,18 @@ const Dashboard = () => {
                     <Box>
                       <Box sx={{
                         display: 'flex',
-                        alignItems: 'center',
                         justifyContent: 'space-between',
                         mb: 0.5,
                         flexDirection: isXsScreen ? 'column' : 'row',
                         alignItems: isXsScreen ? 'flex-start' : 'center',
                       }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" component="span">
                           Items scraped: {job.items}
                         </Typography>
                         <Typography
                           variant="caption"
                           color="text.secondary"
+                          component="span"
                           sx={{ mt: isXsScreen ? 0.5 : 0 }}
                         >
                           {job.time}

@@ -7,7 +7,7 @@ import { Typography, Box, Divider, Paper } from '@mui/material';
  */
 const NodePalette = () => {
   const onDragStart = (event, nodeType) => {
-    event.dataTransfer.setData('application/reactflow/type', nodeType);
+    event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 

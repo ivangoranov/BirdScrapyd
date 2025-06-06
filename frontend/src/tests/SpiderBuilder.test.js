@@ -234,4 +234,77 @@ describe('SpiderBuilder Component', () => {
       expect(screen.getByText('Spider started successfully!')).toBeInTheDocument();
     });
   });
+
+  test('adds a new node via drag and drop', async () => {
+    // Mock axios.get to return mock data with no blocks for a new spider
+    axios.get.mockResolvedValue({
+      data: {
+        ...mockSpider,
+        blocks: []
+      }
+    });
+
+    // Need to mock getBoundingClientRect for the drop functionality
+    Element.prototype.getBoundingClientRect = jest.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 500,
+      height: 500,
+      right: 500,
+      bottom: 500
+    }));
+
+    // Mock for the ReactFlow instance's project method
+    const mockProject = jest.fn((pos) => pos);
+
+    render(<SpiderBuilderWithRouter />);
+
+    // Wait for the component to load
+    await waitFor(() => {
+      expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+    });
+
+    // Mock the ReactFlow instance in the component
+    // This is needed because our onDrop function uses reactFlowInstance.project
+    global.reactFlowInstance = { project: mockProject };
+
+    // Create a DataTransfer object for the drag event
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('application/reactflow', 'selectorNode');
+
+    // Simulate drag over
+    const reactFlow = screen.getByTestId('react-flow');
+    fireEvent.dragOver(reactFlow, {
+      dataTransfer,
+      clientX: 250,
+      clientY: 250
+    });
+
+    // Simulate drop
+    fireEvent.drop(reactFlow, {
+      dataTransfer,
+      clientX: 250,
+      clientY: 250
+    });
+
+    // Assert that a new node was added
+    // Since we can't directly check the state, we'll verify that
+    // when the save button is clicked, the request includes a block
+    const saveButton = screen.getByText('Save Spider');
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(axios.put).toHaveBeenCalledWith(
+        'http://localhost:8000/api/v1/spiders/test-id',
+        expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'Selector',
+              params: expect.anything()
+            })
+          ])
+        })
+      );
+    });
+  });
 });
