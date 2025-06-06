@@ -398,124 +398,202 @@ class SpiderService:
 
         return False
 
-    def _generate_spider_code(self, spider: Spider) -> str:
-        """Generate Scrapy spider code from configuration"""
-        # This is a simplified version - in a real implementation, this would be more sophisticated
-        start_urls = json.dumps(spider.start_urls)
+    async def get_spider_executions(self, spider_id: str) -> List[Dict]:
+        """Get the execution history for a spider"""
+        db = SessionLocal()
+        try:
+            # Query the executions
+            executions = db.query(SpiderExecution).filter(
+                SpiderExecution.spider_id == spider_id
+            ).order_by(SpiderExecution.started_at.desc()).all()
 
-        # Create the spider code template
-        spider_code = f"""
+            # Convert to dictionary format for API response
+            result = []
+            for execution in executions:
+                result.append({
+                    "id": execution.id,
+                    "spider_id": execution.spider_id,
+                    "started_at": execution.started_at.isoformat() if execution.started_at else None,
+                    "finished_at": execution.finished_at.isoformat() if execution.finished_at else None,
+                    "status": execution.status,
+                    "items_scraped": execution.items_scraped,
+                    "error_message": execution.error_message,
+                    "stats": execution.stats
+                })
+            return result
+        finally:
+            db.close()
+
+    async def get_execution(self, execution_id: str) -> Optional[Dict]:
+        """Get a specific execution by ID"""
+        db = SessionLocal()
+        try:
+            # Query the execution
+            execution = db.query(SpiderExecution).filter(
+                SpiderExecution.id == execution_id
+            ).first()
+
+            if not execution:
+                return None
+
+            # Convert to dictionary format for API response
+            return {
+                "id": execution.id,
+                "spider_id": execution.spider_id,
+                "started_at": execution.started_at.isoformat() if execution.started_at else None,
+                "finished_at": execution.finished_at.isoformat() if execution.finished_at else None,
+                "status": execution.status,
+                "items_scraped": execution.items_scraped,
+                "error_message": execution.error_message,
+                "stats": execution.stats
+            }
+        finally:
+            db.close()
+
+    def _generate_spider_code(self, spider):
+        """Generate a Scrapy spider Python code from the spider configuration"""
+        # Extract spider parameters
+        name = spider.name
+        start_urls = spider.start_urls
+        blocks = spider.blocks
+        settings = spider.settings or {}
+
+        # Start building the spider code
+        code = f"""
 import scrapy
 import json
+from scrapy.linkextractors import LinkExtractor
+from scrapy.spiders import CrawlSpider, Rule
+from datetime import datetime
 
-class DynamicSpider(scrapy.Spider):
-    name = "{spider.name}"
+class {name.capitalize()}Spider(scrapy.Spider):
+    name = '{name}'
     start_urls = {start_urls}
+    custom_settings = {settings}
     
-    def __init__(self, *args, **kwargs):
-        super(DynamicSpider, self).__init__(*args, **kwargs)
-        self.blocks = {json.dumps(spider.blocks)}
-        self.settings = {json.dumps(spider.settings)}
-        
     def parse(self, response):
-        # Execute the blocks in the order defined by the configuration
-        return self.execute_block(response, self.get_start_block())
-        
-    def get_start_block(self):
-        # Find the first block (usually a selector connected to start_urls)
-        for block in self.blocks:
-            if not any(block['id'] in next_blocks for other_block in self.blocks 
-                      for next_blocks in (other_block['params'].get('next', []) 
-                                         if isinstance(other_block['params'].get('next', []), list) 
-                                         else [other_block['params'].get('next')] 
-                                         if other_block['params'].get('next') else [])):\n"""
+        \"\"\"Main parsing method for start URLs\"\"\"
+        # Process the response based on the block configuration
+        """
 
-        # Add double curly braces to escape them in the f-string
-        spider_code += """                return block
-        return self.blocks[0] if self.blocks else None
+        # Create a mapping of block IDs to their block data
+        # Handle different possible block formats - could be a list of dicts or a list of Pydantic models
+        block_map = {}
+        if blocks and isinstance(blocks, list):
+            for block in blocks:
+                # Check if block is a dict or a Pydantic model
+                if isinstance(block, dict):
+                    block_map[block["id"]] = block
+                else:
+                    # Assuming it's a Pydantic model, convert to dict
+                    block_dict = block.dict() if hasattr(block, "dict") else vars(block)
+                    block_map[block_dict["id"]] = block_dict
+
+        # Find the starting blocks (blocks that are not referenced in any 'next' parameter)
+        all_blocks = set(block_map.keys())
+        next_blocks = set()
+
+        for block_id, block in block_map.items():
+            params = block.get("params", {})
+            if "next" in params:
+                next_ids = params["next"]
+                if isinstance(next_ids, list):
+                    next_blocks.update(next_ids)
+                elif isinstance(next_ids, str):
+                    next_blocks.add(next_ids)
+
+        starting_blocks = all_blocks - next_blocks
+        if not starting_blocks and all_blocks:
+            # If no clear starting block, just use the first one
+            starting_blocks = {list(all_blocks)[0]}
+
+        # Add the parse method implementation for the starting blocks
+        code += f"""
+        # Execute starting blocks
+        for starting_block_id in {list(starting_blocks)}:
+            yield from self.process_block(response, starting_block_id)
+            
+    def process_block(self, response, block_id):
+        \"\"\"Process a specific block by ID\"\"\"
+        # Block mapping
+        block_mapping = {json.dumps(block_map)}
         
-    def execute_block(self, response, block):
+        # Get the block data
+        block = block_mapping.get(block_id)
         if not block:
+            self.logger.error(f"Block {{block_id}} not found")
             return
             
-        try:
-            block_type = block['type']
-            params = block['params']
+        block_type = block.get('type')
+        params = block.get('params', {{}})
+        
+        # Process based on block type
+        if block_type == 'Selector':
+            # Extract data using the selector
+            selector_type = params.get('selector_type', 'css')
+            selector = params.get('selector', '')
             
-            if block_type == 'Selector':
-                # Execute selector block
-                selector = params.get('xpath', '')
-                if selector:
-                    elements = response.xpath(selector)
-                    for element in elements:
-                        # Process the next blocks
-                        next_blocks = params.get('next', [])
-                        if isinstance(next_blocks, list):
-                            for next_id in next_blocks:
-                                next_block = next((b for b in self.blocks if b['id'] == next_id), None)
-                                yield from self.execute_block(element, next_block)
-                        elif isinstance(next_blocks, str):
-                            next_block = next((b for b in self.blocks if b['id'] == next_blocks), None)
-                            yield from self.execute_block(element, next_block)
-                            
-            elif block_type == 'Processor':
-                # Execute processor block
-                field_name = params.get('field_name', '')
-                extractor = params.get('extractor', 'text')
+            if selector_type == 'css':
+                elements = response.css(selector)
+            elif selector_type == 'xpath':
+                elements = response.xpath(selector)
+            else:
+                self.logger.error(f"Unknown selector type: {{selector_type}}")
+                return
                 
-                if extractor == 'text':
-                    value = response.get() if hasattr(response, 'get') else response.extract()
-                elif extractor == 'attr':
-                    attr_name = params.get('attr_name', '')
-                    value = response.attrib.get(attr_name, '') if hasattr(response, 'attrib') else ''
-                else:
-                    self.logger.warning(f"Unknown extractor type: {extractor}")
-                    value = ''
-                    
-                # Process the next blocks
-                next_blocks = params.get('next', [])
+            # Process each element with the next blocks
+            for element in elements:
+                if 'next' in params:
+                    next_blocks = params['next']
+                    if isinstance(next_blocks, list):
+                        for next_id in next_blocks:
+                            yield from self.process_block(element, next_id)
+                    elif isinstance(next_blocks, str):
+                        yield from self.process_block(element, next_blocks)
+                        
+        elif block_type == 'Processor':
+            # Apply data processing
+            processor_type = params.get('processor_type', 'extract')
+            
+            if processor_type == 'extract':
+                data = response.get() if hasattr(response, 'get') else response.extract()
+            elif processor_type == 'extract_first':
+                data = response.get() if hasattr(response, 'get') else response.extract_first()
+            elif processor_type == 'regular_expression':
+                import re
+                pattern = params.get('pattern', '')
+                text = response.get() if hasattr(response, 'get') else response.extract()
+                match = re.search(pattern, text)
+                data = match.group(1) if match else None
+            else:
+                self.logger.error(f"Unknown processor type: {{processor_type}}")
+                return
+                
+            # Process with the next blocks
+            if 'next' in params:
+                next_blocks = params['next']
                 if isinstance(next_blocks, list):
                     for next_id in next_blocks:
-                        next_block = next((b for b in self.blocks if b['id'] == next_id), None)
-                        if next_block:
-                            # Pass the extracted value to the next block
-                            context = {field_name: value}
-                            response.meta.update(context)
-                            yield from self.execute_block(response, next_block)
+                        yield from self.process_block(data, next_id)
                 elif isinstance(next_blocks, str):
-                    next_block = next((b for b in self.blocks if b['id'] == next_blocks), None)
-                    if next_block:
-                        # Pass the extracted value to the next block
-                        context = {field_name: value}
-                        response.meta.update(context)
-                        yield from self.execute_block(response, next_block)
-                        
-            elif block_type == 'Output':
-                # Execute output block - yield an item
-                fields = params.get('fields', {})
-                item = {}
-                
-                for field_name, field_params in fields.items():
-                    source = field_params.get('source', '')
-                    if source == 'context':
-                        # Get from context (previous processors)
-                        context_key = field_params.get('context_key', '')
-                        item[field_name] = response.meta.get(context_key, '')
-                    elif source == 'xpath':
-                        # Extract directly using xpath
-                        xpath = field_params.get('xpath', '')
-                        item[field_name] = response.xpath(xpath).get('')
-                    elif source == 'const':
-                        # Use a constant value
-                        item[field_name] = field_params.get('value', '')
-                    else:
-                        self.logger.warning(f"Unknown source type: {source}")
-                        item[field_name] = ''
-                        
-                yield item
+                    yield from self.process_block(data, next_blocks)
+                    
+        elif block_type == 'Output':
+            # Generate the output item
+            field_name = params.get('field_name', 'data')
+            
+            # Create an item dictionary
+            item = {{}}
+            if isinstance(response, str):
+                item[field_name] = response
             else:
-                self.logger.warning(f"Unknown block type: {block_type}")
-        except Exception as e:
-            self.logger.error(f"Error executing block {block.get('id', 'unknown')}: {str(e)}")
-"""
-        return spider_code
+                item[field_name] = response.get() if hasattr(response, 'get') else response.extract()
+                
+            # Add metadata
+            item['timestamp'] = datetime.now().isoformat()
+            item['url'] = getattr(response, 'url', None)
+            
+            yield item
+        """
+
+        return code

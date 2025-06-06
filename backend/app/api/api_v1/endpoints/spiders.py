@@ -49,33 +49,65 @@ async def delete_spider(spider_id: str):
     """
     Delete a spider configuration
     """
-    success = await spider_service.delete_spider(spider_id)
-    if not success:
+    result = await spider_service.delete_spider(spider_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Spider not found")
-    return {"message": "Spider deleted successfully"}
+    return {"success": True, "message": "Spider deleted successfully"}
 
-@router.post("/{spider_id}/run", response_model=dict)
+@router.post("/{spider_id}/run", status_code=202)
 async def run_spider(spider_id: str, background_tasks: BackgroundTasks):
     """
     Run a spider in the background
     """
+    # First check if the spider exists
     spider = await spider_service.get_spider(spider_id)
     if not spider:
         raise HTTPException(status_code=404, detail="Spider not found")
 
-    # Add spider execution to background tasks
+    # Check if the spider is already running
+    if spider.status == "running":
+        raise HTTPException(status_code=400, detail="Spider is already running")
+
+    # Run the spider in the background
     background_tasks.add_task(spider_service.run_spider, spider_id)
-    return {"message": f"Spider {spider_id} started", "status": "running"}
+
+    return {"success": True, "message": f"Spider {spider.name} started"}
 
 @router.post("/{spider_id}/stop")
 async def stop_spider(spider_id: str):
     """
     Stop a running spider
     """
-    success = await spider_service.stop_spider(spider_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Spider not found or not running")
-    return {"message": f"Spider {spider_id} stopped", "status": "stopped"}
+    # First check if the spider exists
+    spider = await spider_service.get_spider(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="Spider not found")
+
+    # Check if the spider is running
+    if spider.status != "running":
+        raise HTTPException(status_code=400, detail="Spider is not running")
+
+    # Stop the spider
+    result = await spider_service.stop_spider(spider_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Failed to stop spider")
+
+    return {"success": True, "message": f"Spider {spider.name} stopped"}
+
+@router.get("/{spider_id}/executions", response_model=List[dict])
+async def get_spider_executions(spider_id: str):
+    """
+    Get the execution history for a spider
+    """
+    # First check if the spider exists
+    spider = await spider_service.get_spider(spider_id)
+    if not spider:
+        raise HTTPException(status_code=404, detail="Spider not found")
+
+    # Get the execution history
+    executions = await spider_service.get_spider_executions(spider_id)
+
+    return executions
 
 @router.post("/validate")
 async def validate_spider_config(config: SpiderConfig):

@@ -40,6 +40,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useForm } from 'react-hook-form';
+import axios from 'axios';
 
 // Custom node components
 import SelectorNode from '../components/nodes/SelectorNode';
@@ -47,45 +48,8 @@ import ProcessorNode from '../components/nodes/ProcessorNode';
 import OutputNode from '../components/nodes/OutputNode';
 import NodePalette from '../components/nodes/NodePalette';
 
-// Mock data for editing (would be fetched from API in real implementation)
-const mockSpider = {
-  id: '1',
-  name: 'Product Spider',
-  start_urls: ['https://example.com/products'],
-  blocks: [
-    {
-      id: 'node-1',
-      type: 'Selector',
-      params: {
-        xpath: '//div[@class="product"]',
-        next: ['node-2']
-      },
-      position: { x: 250, y: 100 }
-    },
-    {
-      id: 'node-2',
-      type: 'Processor',
-      params: {
-        field_name: 'title',
-        extractor: 'text',
-        xpath: './/h2',
-        next: ['node-3']
-      },
-      position: { x: 250, y: 250 }
-    },
-    {
-      id: 'node-3',
-      type: 'Output',
-      params: {
-        fields: {
-          title: { source: 'context', context_key: 'title' }
-        }
-      },
-      position: { x: 250, y: 400 }
-    }
-  ],
-  settings: {}
-};
+// API endpoint
+const API_URL = 'http://localhost:8000/api/v1';
 
 // Custom node types for React Flow
 const nodeTypes = {
@@ -109,57 +73,142 @@ const SpiderBuilder = () => {
   const [spiderName, setSpiderName] = useState('');
   const [startUrls, setStartUrls] = useState(['']);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(!!id);
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   // Fetch spider data if editing an existing spider
   useEffect(() => {
     if (id) {
-      // In a real implementation, fetch the spider from the API
-      // Using mock data for now
-      setSpiderName(mockSpider.name);
-      setStartUrls(mockSpider.start_urls);
+      setLoading(true);
+      setIsEditMode(true);
 
-      // Convert blocks to react-flow elements
-      const flowElements = mockSpider.blocks.map(block => ({
-        id: block.id,
-        type: `${block.type.toLowerCase()}Node`,
-        data: { ...block },
-        position: block.position,
-      }));
+      // Fetch the spider data from the API
+      axios.get(`${API_URL}/spiders/${id}`)
+        .then(response => {
+          const spider = response.data;
+          setSpiderName(spider.name);
+          setStartUrls(spider.start_urls || ['']);
 
-      // Add edges based on next parameters
-      const edges = [];
-      mockSpider.blocks.forEach(block => {
-        if (block.params.next) {
-          const nextBlocks = Array.isArray(block.params.next)
-            ? block.params.next
-            : [block.params.next];
-          nextBlocks.forEach(nextId => {
-            edges.push({
-              id: `e-${block.id}-${nextId}`,
-              source: block.id,
-              target: nextId,
-              type: 'smoothstep',
-            });
+          // Convert blocks to React Flow elements
+          const nodes = spider.blocks.map(block => ({
+            id: block.id,
+            type: getNodeType(block.type),
+            position: block.position || { x: 100, y: 100 },
+            data: {
+              label: block.type,
+              params: block.params || {}
+            }
+          }));
+
+          // Add edges based on 'next' params
+          const edges = [];
+          spider.blocks.forEach(block => {
+            if (block.params && block.params.next) {
+              const nextIds = Array.isArray(block.params.next)
+                ? block.params.next
+                : [block.params.next];
+
+              nextIds.forEach(targetId => {
+                edges.push({
+                  id: `e-${block.id}-${targetId}`,
+                  source: block.id,
+                  target: targetId,
+                  animated: true
+                });
+              });
+            }
           });
-        }
-      });
 
-      setElements([...flowElements, ...edges]);
+          setElements([...nodes, ...edges]);
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error('Error fetching spider:', error);
+          setSnackbar({
+            open: true,
+            message: `Error loading spider: ${error.response?.data?.detail || error.message}`,
+            severity: 'error'
+          });
+          setLoading(false);
+        });
     }
   }, [id]);
 
-  // Close palette on mobile when screen size changes
-  useEffect(() => {
-    if (isMobile) {
-      setPaletteOpen(false);
-    } else {
-      setPaletteOpen(true);
+  // Helper function to get the correct node type for React Flow
+  const getNodeType = (blockType) => {
+    switch (blockType) {
+      case 'Selector': return 'selectorNode';
+      case 'Processor': return 'processorNode';
+      case 'Output': return 'outputNode';
+      default: return 'selectorNode';
     }
-  }, [isMobile]);
+  };
 
-  // React Flow event handlers
-  const onDragOver = useCallback((event) => {
+  // Add a new URL input field
+  const handleAddUrl = () => {
+    setStartUrls([...startUrls, '']);
+  };
+
+  // Update URL at specific index
+  const handleUrlChange = (index, value) => {
+    const newUrls = [...startUrls];
+    newUrls[index] = value;
+    setStartUrls(newUrls);
+  };
+
+  // Remove URL at specific index
+  const handleRemoveUrl = (index) => {
+    if (startUrls.length > 1) {
+      const newUrls = startUrls.filter((_, i) => i !== index);
+      setStartUrls(newUrls);
+    }
+  };
+
+  // Handle snackbar close
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // Handle node selection
+  const onNodeClick = (_, node) => {
+    setSelectedNode(node);
+    setDrawerOpen(true);
+  };
+
+  // Handle node update
+  const handleNodeUpdate = (updatedParams) => {
+    setElements(els =>
+      els.map(el => {
+        if (el.id === selectedNode.id) {
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              params: updatedParams
+            }
+          };
+        }
+        return el;
+      })
+    );
+  };
+
+  // Handle node deletion
+  const handleDeleteNode = (nodeId) => {
+    setElements(els => els.filter(el => el.id !== nodeId && el.source !== nodeId && el.target !== nodeId));
+    setSelectedNode(null);
+    setDrawerOpen(false);
+  };
+
+  // Handle connection between nodes
+  const onConnect = useCallback(
+    (params) => setElements(els => addEdge({ ...params, animated: true }, els)),
+    []
+  );
+
+  // Handle adding a new node from the palette
+  const onDragOver = useCallback(event => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
@@ -168,8 +217,10 @@ const SpiderBuilder = () => {
     (event) => {
       event.preventDefault();
 
+      if (!reactFlowInstance) return;
+
       const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-      const type = event.dataTransfer.getData('application/reactflow/type');
+      const type = event.dataTransfer.getData('application/reactflow');
 
       if (!type) return;
 
@@ -178,435 +229,431 @@ const SpiderBuilder = () => {
         y: event.clientY - reactFlowBounds.top,
       });
 
-      const newNode = {
-        id: `node-${uuidv4()}`,
-        type,
-        position,
-        data: {
-          params: {
-            // Default parameters for each node type
-            ...(type === 'selectorNode' && { xpath: '//div' }),
-            ...(type === 'processorNode' && { field_name: 'new_field', extractor: 'text', xpath: './/span' }),
-            ...(type === 'outputNode' && { fields: {} })
-          }
-        },
-      };
+      const nodeId = uuidv4();
 
-      setElements((els) => els.concat(newNode));
+      // Create appropriate node based on type
+      let newNode = {};
+
+      switch (type) {
+        case 'selectorNode':
+          newNode = {
+            id: nodeId,
+            type,
+            position,
+            data: {
+              label: 'Selector',
+              params: { selector_type: 'css', selector: '' }
+            }
+          };
+          break;
+        case 'processorNode':
+          newNode = {
+            id: nodeId,
+            type,
+            position,
+            data: {
+              label: 'Processor',
+              params: { processor_type: 'extract' }
+            }
+          };
+          break;
+        case 'outputNode':
+          newNode = {
+            id: nodeId,
+            type,
+            position,
+            data: {
+              label: 'Output',
+              params: { field_name: 'data' }
+            }
+          };
+          break;
+        default:
+          return;
+      }
+
+      setElements(els => [...els, newNode]);
     },
     [reactFlowInstance]
   );
 
-  const onConnect = useCallback(
-    (params) => setElements((els) => addEdge(params, els)),
-    []
-  );
-
-  const onElementsRemove = useCallback(
-    (elementsToRemove) => {
-      setElements((els) => els.filter((el) => !elementsToRemove.includes(el)));
-    },
-    []
-  );
-
-  const onLoad = useCallback(
-    (instance) => {
-      setReactFlowInstance(instance);
-    },
-    []
-  );
-
-  const onNodeClick = useCallback((event, node) => {
-    setSelectedNode(node);
-    if (isMobile) {
-      setDrawerOpen(true);
-    }
-  }, [isMobile]);
-
   // Save the spider configuration
-  const saveSpider = () => {
-    const spiderConfig = {
+  const handleSave = async () => {
+    if (!spiderName.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter a name for your spider',
+        severity: 'error'
+      });
+      return;
+    }
+
+    if (!startUrls[0]) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter at least one start URL',
+        severity: 'error'
+      });
+      return;
+    }
+
+    // Get only nodes, not edges
+    const nodes = elements.filter(el => el.type);
+    if (nodes.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Please add at least one block to your spider',
+        severity: 'error'
+      });
+      return;
+    }
+
+    // Prepare the spider configuration
+    const spider = {
       name: spiderName,
-      start_urls: startUrls.filter(url => url.trim() !== ''),
-      blocks: elements.filter(el => el.type !== 'default').map(el => ({
-        id: el.id,
-        type: el.type.replace('Node', ''),
-        params: el.data.params,
-        position: el.position
-      }))
+      start_urls: startUrls.filter(url => url.trim()),
+      blocks: nodes.map(node => ({
+        id: node.id,
+        type: node.data.label,
+        params: node.data.params || {},
+        position: node.position
+      })),
+      settings: {}
     };
 
-    // In a real implementation, this would save to the API
-    // api.saveSpider(spiderConfig).then(() => {
-    //   navigate('/spiders');
-    // });
+    setLoading(true);
 
-    console.log('Saving spider:', spiderConfig);
+    try {
+      let response;
+      if (isEditMode) {
+        // Update existing spider
+        response = await axios.put(`${API_URL}/spiders/${id}`, spider);
+      } else {
+        // Create new spider
+        response = await axios.post(`${API_URL}/spiders/`, spider);
+      }
 
-    setSnackbar({
-      open: true,
-      message: 'Spider saved successfully',
-      severity: 'success'
-    });
+      setSnackbar({
+        open: true,
+        message: `Spider ${isEditMode ? 'updated' : 'created'} successfully!`,
+        severity: 'success'
+      });
+
+      // Redirect to the spider list after a short delay
+      setTimeout(() => {
+        navigate('/spiders');
+      }, 2000);
+    } catch (error) {
+      console.error('Error saving spider:', error);
+      setSnackbar({
+        open: true,
+        message: `Error saving spider: ${error.response?.data?.detail || error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Run the spider
-  const runSpider = () => {
-    // In a real implementation, this would start the spider
-    // api.runSpider(id).then(() => {
-    //   navigate(`/monitor/${id}`);
-    // });
-
-    setSnackbar({
-      open: true,
-      message: 'Spider started successfully',
-      severity: 'success'
-    });
-  };
-
-  // Handle adding/removing start URLs
-  const handleAddStartUrl = () => {
-    setStartUrls([...startUrls, '']);
-  };
-
-  const handleRemoveStartUrl = (index) => {
-    const newUrls = [...startUrls];
-    newUrls.splice(index, 1);
-    setStartUrls(newUrls);
-  };
-
-  const handleStartUrlChange = (index, value) => {
-    const newUrls = [...startUrls];
-    newUrls[index] = value;
-    setStartUrls(newUrls);
-  };
-
-  // Close drawer and snackbar handlers
-  const handleCloseDrawer = () => {
-    setDrawerOpen(false);
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  const togglePalette = () => {
-    setPaletteOpen(!paletteOpen);
-  };
-
-  // Zoom functionality for mobile
-  const zoomIn = () => {
-    if (reactFlowInstance) {
-      reactFlowInstance.zoomIn();
+  const handleRunSpider = async () => {
+    if (!id) {
+      setSnackbar({
+        open: true,
+        message: 'Please save the spider before running it',
+        severity: 'warning'
+      });
+      return;
     }
-  };
 
-  const zoomOut = () => {
-    if (reactFlowInstance) {
-      reactFlowInstance.zoomOut();
-    }
-  };
-
-  const resetView = () => {
-    if (reactFlowInstance) {
-      reactFlowInstance.fitView();
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/spiders/${id}/run`);
+      setSnackbar({
+        open: true,
+        message: 'Spider started successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error running spider:', error);
+      setSnackbar({
+        open: true,
+        message: `Error running spider: ${error.response?.data?.detail || error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Box sx={{ height: isMobile ? 'calc(100vh - 130px)' : 'calc(100vh - 180px)' }}>
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        flexDirection: { xs: 'column', sm: 'row' },
-        gap: { xs: 2, sm: 0 },
-        mb: 2
-      }}>
-        <Typography variant={isSmallScreen ? "h5" : "h4"} component="h1" gutterBottom={!isSmallScreen}>
-          {id ? 'Edit Spider' : 'Create New Spider'}
-        </Typography>
-
-        <Box sx={{
-          display: 'flex',
-          gap: 1,
-          flexDirection: { xs: 'column', sm: 'row' },
-          width: { xs: '100%', sm: 'auto' },
-        }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<SaveIcon />}
-            onClick={saveSpider}
-            fullWidth={isSmallScreen}
-          >
-            Save
-          </Button>
-
-          {id && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              onClick={runSpider}
-              fullWidth={isSmallScreen}
-            >
-              Run Spider
-            </Button>
-          )}
-        </Box>
-      </Box>
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            label="Spider Name"
-            value={spiderName}
-            onChange={(e) => setSpiderName(e.target.value)}
-            size={isSmallScreen ? "small" : "medium"}
-          />
-        </Grid>
-      </Grid>
-
-      <Paper
-        sx={{
-          p: { xs: 1.5, sm: 2 },
-          mb: 2,
-          borderRadius: 2,
-          border: '1px solid rgba(0,0,0,0.08)',
-          elevation: 0
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
-          Start URLs
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-
-        {startUrls.map((url, index) => (
-          <Box
-            key={index}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              mb: 1,
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: { xs: 1, sm: 0 }
-            }}
-          >
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Spider configuration */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
-              label={`URL ${index + 1}`}
-              value={url}
-              onChange={(e) => handleStartUrlChange(index, e.target.value)}
-              sx={{ mr: { xs: 0, sm: 1 }, mb: { xs: 1, sm: 0 } }}
-              size={isSmallScreen ? "small" : "medium"}
+              label="Spider Name"
+              value={spiderName}
+              onChange={(e) => setSpiderName(e.target.value)}
+              error={!spiderName.trim()}
+              helperText={!spiderName.trim() ? 'Name is required' : ''}
             />
-            <IconButton
-              color="error"
-              onClick={() => handleRemoveStartUrl(index)}
-              disabled={startUrls.length === 1}
-              sx={{ ml: { xs: 'auto', sm: 0 } }}
-            >
-              <DeleteIcon />
-            </IconButton>
-          </Box>
-        ))}
+          </Grid>
 
-        <Button
-          startIcon={<AddIcon />}
-          onClick={handleAddStartUrl}
-          sx={{ mt: 1 }}
-          size={isSmallScreen ? "small" : "medium"}
-        >
-          Add URL
-        </Button>
-      </Paper>
-
-      <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
-        Spider Flow
-      </Typography>
-
-      <Paper
-        sx={{
-          borderRadius: 2,
-          border: '1px solid rgba(0,0,0,0.08)',
-          elevation: 0,
-          display: 'flex',
-          overflow: 'hidden',
-          height: { xs: 400, sm: 500, md: 600 }
-        }}
-      >
-        <Box
-          sx={{
-            display: paletteOpen ? 'block' : 'none',
-            width: 240,
-            borderRight: '1px solid rgba(0,0,0,0.08)',
-            height: '100%',
-            overflow: 'auto'
-          }}
-        >
-          <NodePalette />
-        </Box>
-
-        <Box sx={{ flexGrow: 1, position: 'relative', height: '100%' }}>
-          <ReactFlowProvider>
-            <Box ref={reactFlowWrapper} sx={{ width: '100%', height: '100%' }}>
-              <ReactFlow
-                elements={elements}
-                onConnect={onConnect}
-                onElementsRemove={onElementsRemove}
-                onLoad={onLoad}
-                onDrop={onDrop}
-                onDragOver={onDragOver}
-                nodeTypes={nodeTypes}
-                deleteKeyCode={46}
-                onNodeClick={onNodeClick}
-                snapToGrid={true}
-                snapGrid={[15, 15]}
-              >
-                <Background color="#aaa" gap={16} />
-                {!isMobile && <Controls />}
-                {!isMobile && <MiniMap nodeStrokeWidth={3} />}
-              </ReactFlow>
-            </Box>
-          </ReactFlowProvider>
-
-          {/* Mobile fab buttons for controls */}
-          {isMobile && (
-            <Box sx={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1
-            }}>
-              <Tooltip title="Zoom In" placement="left">
-                <Fab color="primary" size="small" onClick={zoomIn}>
-                  <ZoomInIcon />
-                </Fab>
-              </Tooltip>
-
-              <Tooltip title="Zoom Out" placement="left">
-                <Fab color="primary" size="small" onClick={zoomOut}>
-                  <ZoomOutIcon />
-                </Fab>
-              </Tooltip>
-
-              <Tooltip title="Reset View" placement="left">
-                <Fab color="primary" size="small" onClick={resetView}>
-                  <RestartAltIcon />
-                </Fab>
-              </Tooltip>
-
-              <Tooltip title="Show Node Palette" placement="left">
-                <Fab color="secondary" size="small" onClick={togglePalette}>
-                  <PaletteIcon />
-                </Fab>
-              </Tooltip>
-            </Box>
-          )}
-        </Box>
-      </Paper>
-
-      {/* Node settings drawer for mobile */}
-      <Drawer
-        anchor="bottom"
-        open={drawerOpen}
-        onClose={handleCloseDrawer}
-        PaperProps={{
-          sx: {
-            maxHeight: '70%',
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            p: 2
-          }
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Node Settings</Typography>
-          <IconButton onClick={handleCloseDrawer}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-
-        <Divider sx={{ mb: 2 }} />
-
-        {selectedNode && (
-          <Box>
-            <Typography variant="body1" fontWeight="medium" gutterBottom>
-              {selectedNode.type === 'selectorNode' && 'Selector Node'}
-              {selectedNode.type === 'processorNode' && 'Processor Node'}
-              {selectedNode.type === 'outputNode' && 'Output Node'}
+          <Grid item xs={12} md={8}>
+            <Typography variant="subtitle1" gutterBottom>
+              Start URLs:
             </Typography>
 
-            {/* Node specific settings would go here */}
-            <TextField
-              fullWidth
-              label="Node ID"
-              value={selectedNode.id}
-              disabled
-              size="small"
-              sx={{ mb: 2 }}
-            />
+            {startUrls.map((url, index) => (
+              <Box key={index} sx={{ display: 'flex', mb: 1 }}>
+                <TextField
+                  fullWidth
+                  label={`URL ${index + 1}`}
+                  value={url}
+                  onChange={(e) => handleUrlChange(index, e.target.value)}
+                  sx={{ mr: 1 }}
+                />
+                <IconButton
+                  color="error"
+                  onClick={() => handleRemoveUrl(index)}
+                  disabled={startUrls.length === 1}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
 
-            {selectedNode.type === 'selectorNode' && (
-              <TextField
-                fullWidth
-                label="XPath Expression"
-                value={selectedNode.data.params.xpath || ''}
-                onChange={(e) => {
-                  const newElements = elements.map(el =>
-                    el.id === selectedNode.id
-                      ? { ...el, data: { ...el.data, params: { ...el.data.params, xpath: e.target.value } } }
-                      : el
-                  );
-                  setElements(newElements);
-                }}
-                size="small"
-                sx={{ mb: 2 }}
-              />
-            )}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={handleAddUrl}
+              sx={{ mt: 1 }}
+            >
+              Add URL
+            </Button>
+          </Grid>
+        </Grid>
 
-            {/* More settings based on node type */}
+        <Divider sx={{ my: 2 }} />
 
-            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Button
+            variant="outlined"
+            startIcon={<PaletteIcon />}
+            onClick={() => setPaletteOpen(!paletteOpen)}
+          >
+            {paletteOpen ? 'Hide Palette' : 'Show Palette'}
+          </Button>
+
+          <Box>
+            {id && (
               <Button
                 variant="contained"
                 color="primary"
-                onClick={handleCloseDrawer}
-                fullWidth
+                startIcon={<PlayArrowIcon />}
+                onClick={handleRunSpider}
+                sx={{ mr: 1 }}
+                disabled={loading}
               >
-                Apply
+                Run Spider
               </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={() => {
-                  onElementsRemove([selectedNode]);
-                  handleCloseDrawer();
+            )}
+
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={loading}
+            >
+              Save Spider
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Flow builder */}
+      <Paper sx={{ flexGrow: 1, height: 'calc(100vh - 250px)', position: 'relative' }}>
+        <ReactFlowProvider>
+          <Box
+            ref={reactFlowWrapper}
+            sx={{
+              height: '100%',
+              width: '100%'
+            }}
+          >
+            <ReactFlow
+              elements={elements}
+              nodeTypes={nodeTypes}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onInit={setReactFlowInstance}
+              snapToGrid={true}
+              snapGrid={[15, 15]}
+              defaultZoom={0.8}
+              minZoom={0.2}
+              maxZoom={2}
+            >
+              <Controls />
+              <MiniMap
+                nodeColor={(node) => {
+                  switch (node.type) {
+                    case 'selectorNode':
+                      return '#00ccff';
+                    case 'processorNode':
+                      return '#ff9900';
+                    case 'outputNode':
+                      return '#00ff00';
+                    default:
+                      return '#eee';
+                  }
                 }}
-                fullWidth
-              >
-                Delete Node
-              </Button>
-            </Stack>
+              />
+              <Background
+                variant="dots"
+                gap={16}
+                size={1}
+              />
+            </ReactFlow>
+          </Box>
+        </ReactFlowProvider>
+      </Paper>
+
+      {/* Node config drawer */}
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{
+          sx: { width: isSmallScreen ? '100%' : 320 }
+        }}
+      >
+        {selectedNode && (
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                {selectedNode.data.label} Configuration
+              </Typography>
+              <IconButton onClick={() => setDrawerOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            <Divider sx={{ mb: 2 }} />
+
+            {/* Node-specific configuration form */}
+            {selectedNode.type === 'selectorNode' && (
+              <Box>
+                <TextField
+                  fullWidth
+                  label="Selector Type"
+                  select
+                  SelectProps={{ native: true }}
+                  value={selectedNode.data.params?.selector_type || 'css'}
+                  onChange={(e) => handleNodeUpdate({
+                    ...selectedNode.data.params,
+                    selector_type: e.target.value
+                  })}
+                  sx={{ mb: 2 }}
+                >
+                  <option value="css">CSS</option>
+                  <option value="xpath">XPath</option>
+                </TextField>
+
+                <TextField
+                  fullWidth
+                  label="Selector"
+                  value={selectedNode.data.params?.selector || ''}
+                  onChange={(e) => handleNodeUpdate({
+                    ...selectedNode.data.params,
+                    selector: e.target.value
+                  })}
+                  sx={{ mb: 2 }}
+                />
+              </Box>
+            )}
+
+            {selectedNode.type === 'processorNode' && (
+              <Box>
+                <TextField
+                  fullWidth
+                  label="Processor Type"
+                  select
+                  SelectProps={{ native: true }}
+                  value={selectedNode.data.params?.processor_type || 'extract'}
+                  onChange={(e) => handleNodeUpdate({
+                    ...selectedNode.data.params,
+                    processor_type: e.target.value
+                  })}
+                  sx={{ mb: 2 }}
+                >
+                  <option value="extract">Extract</option>
+                  <option value="extract_first">Extract First</option>
+                  <option value="regular_expression">Regular Expression</option>
+                </TextField>
+
+                {selectedNode.data.params?.processor_type === 'regular_expression' && (
+                  <TextField
+                    fullWidth
+                    label="Pattern"
+                    value={selectedNode.data.params?.pattern || ''}
+                    onChange={(e) => handleNodeUpdate({
+                      ...selectedNode.data.params,
+                      pattern: e.target.value
+                    })}
+                    sx={{ mb: 2 }}
+                  />
+                )}
+              </Box>
+            )}
+
+            {selectedNode.type === 'outputNode' && (
+              <Box>
+                <TextField
+                  fullWidth
+                  label="Field Name"
+                  value={selectedNode.data.params?.field_name || 'data'}
+                  onChange={(e) => handleNodeUpdate({
+                    ...selectedNode.data.params,
+                    field_name: e.target.value
+                  })}
+                  sx={{ mb: 2 }}
+                />
+              </Box>
+            )}
+
+            <Button
+              fullWidth
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => handleDeleteNode(selectedNode.id)}
+              sx={{ mt: 2 }}
+            >
+              Delete Node
+            </Button>
           </Box>
         )}
       </Drawer>
 
-      {/* Node palette drawer for mobile */}
-      {isMobile && (
+      {/* Node palette */}
+      {paletteOpen && (
         <Drawer
+          variant="permanent"
           anchor="left"
-          open={paletteOpen}
-          onClose={togglePalette}
-          sx={{
-            '& .MuiDrawer-paper': {
-              width: 240,
-              mt: '56px', // Header height on mobile
-              height: 'calc(100% - 56px)'
+          PaperProps={{
+            sx: {
+              width: 200,
+              position: 'absolute',
+              height: 'calc(100% - 16px)',
+              top: 8,
+              left: 8,
+              borderRadius: 1,
+              zIndex: 1
             }
           }}
         >

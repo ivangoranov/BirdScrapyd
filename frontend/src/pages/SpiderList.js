@@ -12,7 +12,9 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Box
+  Box,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -20,58 +22,67 @@ import StopIcon from '@mui/icons-material/Stop';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import axios from 'axios';
 
-// Mock data for spiders (would be fetched from API in real implementation)
-const mockSpiders = [
-  { id: '1', name: 'Product Spider', status: 'idle', lastRun: '2023-05-10', itemsScraped: 1245 },
-  { id: '2', name: 'News Spider', status: 'running', lastRun: '2023-05-15', itemsScraped: 567 },
-  { id: '3', name: 'Blog Spider', status: 'error', lastRun: '2023-05-01', itemsScraped: 0 },
-  { id: '4', name: 'Review Spider', status: 'idle', lastRun: '2023-04-20', itemsScraped: 890 },
-];
+// API endpoint
+const API_URL = 'http://localhost:8000/api/v1';
 
 const SpiderList = () => {
   const [spiders, setSpiders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchSpiders = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/spiders/`);
+      setSpiders(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching spiders:', err);
+      setError('Failed to load spiders. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // In a real implementation, fetch from the API
-    // api.getSpiders().then(data => {
-    //   setSpiders(data);
-    //   setLoading(false);
-    // });
-
-    // Using mock data for now
-    setSpiders(mockSpiders);
-    setLoading(false);
+    fetchSpiders();
   }, []);
 
-  const handleRunSpider = (id) => {
-    // In a real implementation, call the API to start the spider
-    console.log(`Running spider ${id}`);
-    // Update the local state to reflect the change
-    setSpiders(
-      spiders.map(spider =>
-        spider.id === id ? { ...spider, status: 'running' } : spider
-      )
-    );
+  const handleRunSpider = async (id) => {
+    try {
+      await axios.post(`${API_URL}/spiders/${id}/run`);
+      // Refresh the list to show updated status
+      fetchSpiders();
+    } catch (err) {
+      console.error(`Error running spider ${id}:`, err);
+      setError(`Failed to run spider. ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const handleStopSpider = (id) => {
-    // In a real implementation, call the API to stop the spider
-    console.log(`Stopping spider ${id}`);
-    // Update the local state to reflect the change
-    setSpiders(
-      spiders.map(spider =>
-        spider.id === id ? { ...spider, status: 'idle' } : spider
-      )
-    );
+  const handleStopSpider = async (id) => {
+    try {
+      await axios.post(`${API_URL}/spiders/${id}/stop`);
+      // Refresh the list to show updated status
+      fetchSpiders();
+    } catch (err) {
+      console.error(`Error stopping spider ${id}:`, err);
+      setError(`Failed to stop spider. ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const handleDeleteSpider = (id) => {
-    // In a real implementation, call the API to delete the spider
-    console.log(`Deleting spider ${id}`);
-    // Update the local state to reflect the change
-    setSpiders(spiders.filter(spider => spider.id !== id));
+  const handleDeleteSpider = async (id) => {
+    if (window.confirm('Are you sure you want to delete this spider? This action cannot be undone.')) {
+      try {
+        await axios.delete(`${API_URL}/spiders/${id}`);
+        // Remove from local state
+        setSpiders(spiders.filter(spider => spider.id !== id));
+      } catch (err) {
+        console.error(`Error deleting spider ${id}:`, err);
+        setError(`Failed to delete spider. ${err.response?.data?.detail || err.message}`);
+      }
+    }
   };
 
   // Function to render status chip with appropriate color
@@ -94,6 +105,14 @@ const SpiderList = () => {
       />
     );
   };
+
+  if (loading) {
+    return <CircularProgress />;
+  }
+
+  if (error) {
+    return <Alert severity="error">{error}</Alert>;
+  }
 
   return (
     <div>

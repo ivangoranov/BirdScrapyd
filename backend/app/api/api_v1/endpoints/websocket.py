@@ -52,25 +52,57 @@ async def websocket_spider_endpoint(websocket: WebSocket, spider_id: str):
     """
     await manager.connect(websocket, spider_id)
     try:
+        # Send initial connection message
+        await websocket.send_json({
+            "status": "connected",
+            "message": f"Connected to spider {spider_id}"
+        })
+
         while True:
-            # This keeps the connection open and waits for messages from the client
-            # In our case, mainly for keeping the connection alive
+            # Wait for any messages from the client
             data = await websocket.receive_text()
-            # We could process client messages here if needed
+            try:
+                message = json.loads(data)
+                # Handle client commands if needed
+                if "command" in message:
+                    command = message["command"]
+                    if command == "ping":
+                        await websocket.send_json({"status": "pong"})
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "status": "error",
+                    "message": "Invalid JSON message"
+                })
     except WebSocketDisconnect:
         manager.disconnect(websocket, spider_id)
 
-@router.websocket("/all")
-async def websocket_all_spiders_endpoint(websocket: WebSocket):
+@router.websocket("/global")
+async def websocket_global_endpoint(websocket: WebSocket):
     """
-    WebSocket connection for all spiders updates (global monitoring)
+    WebSocket connection for all spider updates (global listener)
     """
-    # Use a special ID for global connections
-    all_spiders_id = "global"
-    await manager.connect(websocket, all_spiders_id)
+    await manager.connect(websocket, "global")
     try:
+        # Send initial connection message
+        await websocket.send_json({
+            "status": "connected",
+            "message": "Connected to global spider updates"
+        })
+
         while True:
-            # Keep connection open
+            # Wait for any messages from the client
             data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                # Handle client commands if needed
+                if "command" in message:
+                    command = message["command"]
+                    if command == "ping":
+                        await websocket.send_json({"status": "pong"})
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "status": "error",
+                    "message": "Invalid JSON message"
+                })
     except WebSocketDisconnect:
-        manager.disconnect(websocket, all_spiders_id)
+        manager.disconnect(websocket, "global")
