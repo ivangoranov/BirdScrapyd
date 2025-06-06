@@ -1,0 +1,15 @@
+fastapi>=0.68.0
+uvicorn>=0.15.0
+pydantic>=1.8.2
+sqlalchemy>=1.4.23
+scrapy>=2.5.1
+psycopg2-binary>=2.9.1
+alembic>=1.7.1
+websockets>=10.0
+python-dotenv>=0.19.0
+aiofiles>=0.7.0
+httpx>=0.19.0
+pytest>=6.2.5
+tenacity>=8.0.1
+rich>=10.12.0
+asyncio>=3.4.3
