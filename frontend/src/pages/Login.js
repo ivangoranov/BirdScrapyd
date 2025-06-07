@@ -13,6 +13,7 @@ import {
   Grid
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import logo from '../assets/images/logo.svg';
 
 const LoginPage = () => {
   const [credentials, setCredentials] = useState({
@@ -80,9 +81,19 @@ const LoginPage = () => {
             width: '100%',
           }}
         >
-          <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-            PIRAT Login
-          </Typography>
+          <Box
+            sx={{
+              backgroundColor: '#121212',
+              padding: 2,
+              borderRadius: 1,
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: '16px'
+            }}
+          >
+            <img src={logo} alt="Logo" style={{ width: '80%', height: 'auto' }} />
+          </Box>
           
           {(error || formError) && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>

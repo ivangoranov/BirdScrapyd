@@ -22,38 +22,62 @@ const NodePalette = () => {
         <Box
           className="node-drag-item"
           sx={{
-            backgroundColor: '#e3f2fd',
-            borderLeft: '4px solid #90caf9'
+            backgroundColor: '#1565c0',
+            borderLeft: '4px solid #90caf9',
+            color: 'white',
+            p: 1.5,
+            borderRadius: 1,
+            cursor: 'grab',
+            '&:hover': {
+              backgroundColor: '#0d47a1',
+              boxShadow: 1
+            }
           }}
           onDragStart={(e) => onDragStart(e, 'selectorNode')}
           draggable
         >
-          <Typography variant="body2" fontWeight="medium">Selector</Typography>
+          <Typography variant="body2" fontWeight="medium" color="inherit">Selector</Typography>
         </Box>
 
         <Box
           className="node-drag-item"
           sx={{
             my: 2,
-            backgroundColor: '#f3e5f5',
-            borderLeft: '4px solid #ce93d8'
+            backgroundColor: '#7b1fa2',
+            borderLeft: '4px solid #ce93d8',
+            color: 'white',
+            p: 1.5,
+            borderRadius: 1,
+            cursor: 'grab',
+            '&:hover': {
+              backgroundColor: '#6a1b9a',
+              boxShadow: 1
+            }
           }}
           onDragStart={(e) => onDragStart(e, 'processorNode')}
           draggable
         >
-          <Typography variant="body2" fontWeight="medium">Processor</Typography>
+          <Typography variant="body2" fontWeight="medium" color="inherit">Processor</Typography>
         </Box>
 
         <Box
           className="node-drag-item"
           sx={{
-            backgroundColor: '#e8f5e9',
-            borderLeft: '4px solid #a5d6a7'
+            backgroundColor: '#2e7d32',
+            borderLeft: '4px solid #a5d6a7',
+            color: 'white',
+            p: 1.5,
+            borderRadius: 1,
+            cursor: 'grab',
+            '&:hover': {
+              backgroundColor: '#1b5e20',
+              boxShadow: 1
+            }
           }}
           onDragStart={(e) => onDragStart(e, 'outputNode')}
           draggable
         >
-          <Typography variant="body2" fontWeight="medium">Output</Typography>
+          <Typography variant="body2" fontWeight="medium" color="inherit">Output</Typography>
         </Box>
 
         <Divider sx={{ my: 2 }} />

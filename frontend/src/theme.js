@@ -2,19 +2,24 @@ import { createTheme } from '@mui/material/styles';
 
 const theme = createTheme({
   palette: {
+    mode: 'dark',
     primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
+      main: '#90caf9',  // По-бледо синьо
+      light: '#e3f2fd',
+      dark: '#42a5f5',
     },
     secondary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
+      main: '#ce93d8',
+      light: '#f3e5f5',
+      dark: '#ab47bc',
     },
     background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
+      default: '#121212',
+      paper: '#1e1e1e',
+    },
+    text: {
+      primary: '#ffffff',  // Бял цвят за основния текст
+      secondary: '#b3b3b3',
     },
   },
   typography: {
@@ -35,14 +40,14 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.36)',
         },
       },
     },
     MuiPaper: {
       styleOverrides: {
         root: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.36)',
         },
       },
     },

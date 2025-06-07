@@ -17,6 +17,27 @@ code {
     monospace;
 }
 
+/* Fix for webkit-link color on dark backgrounds */
+a, :any-link, :-webkit-any-link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Apply proper link colors based on background context */
+.react-flow__controls a,
+.react-flow__node a,
+.MuiDrawer-paper a,
+[class*="dark"] a,
+[style*="background-color: #1565c0"] a,
+[style*="background-color: #7b1fa2"] a,
+[style*="background-color: #2e7d32"] a,
+[style*="background: #1565c0"] a,
+[style*="background: #7b1fa2"] a,
+[style*="background: #2e7d32"] a {
+  color: #ffffff !important;
+  text-decoration: underline;
+}
+
 /* React Flow Custom Styling */
 .react-flow__node {
   border-radius: 8px;

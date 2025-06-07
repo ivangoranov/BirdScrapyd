@@ -477,48 +477,73 @@ const SpiderBuilder = () => {
       {/* Flow builder */}
       <Paper sx={{ flexGrow: 1, height: 'calc(100vh - 250px)', position: 'relative' }}>
         <ReactFlowProvider>
-          <Box
-            ref={reactFlowWrapper}
-            sx={{
-              height: '100%',
-              width: '100%'
-            }}
-          >
-            <ReactFlow
-              elements={elements}
-              nodeTypes={nodeTypes}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onInit={setReactFlowInstance}
-              snapToGrid={true}
-              snapGrid={[15, 15]}
-              defaultZoom={0.8}
-              minZoom={0.2}
-              maxZoom={2}
+          <Box sx={{ display: 'flex', height: '100%', width: '100%' }}>
+            {paletteOpen && (
+              <Box sx={{
+                width: 200,
+                height: '100%',
+                zIndex: 1,
+                mr: 1
+              }}>
+                <NodePalette />
+              </Box>
+            )}
+            <Box
+              ref={reactFlowWrapper}
+              sx={{
+                height: '100%',
+                flexGrow: 1
+              }}
             >
-              <Controls />
-              <MiniMap
-                nodeColor={(node) => {
-                  switch (node.type) {
-                    case 'selectorNode':
-                      return '#00ccff';
-                    case 'processorNode':
-                      return '#ff9900';
-                    case 'outputNode':
-                      return '#00ff00';
-                    default:
-                      return '#eee';
-                  }
-                }}
-              />
-              <Background
-                variant="dots"
-                gap={16}
-                size={1}
-              />
-            </ReactFlow>
+              <ReactFlow
+                elements={elements}
+                nodeTypes={nodeTypes}
+                onConnect={onConnect}
+                onNodeClick={onNodeClick}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onInit={setReactFlowInstance}
+                snapToGrid={true}
+                snapGrid={[15, 15]}
+                defaultZoom={0.8}
+                minZoom={0.2}
+                maxZoom={2}
+              >
+                <Controls />
+                <MiniMap
+                  nodeColor={(node) => {
+                    switch (node.type) {
+                      case 'selectorNode':
+                        return '#1565c0'; // Darker blue
+                      case 'processorNode':
+                        return '#7b1fa2'; // Darker purple
+                      case 'outputNode':
+                        return '#2e7d32'; // Darker green
+                      default:
+                        return '#616161'; // Darker gray
+                    }
+                  }}
+                  nodeStrokeColor={(node) => {
+                    switch (node.type) {
+                      case 'selectorNode':
+                        return '#90caf9'; // Light blue
+                      case 'processorNode':
+                        return '#ce93d8'; // Light purple
+                      case 'outputNode':
+                        return '#a5d6a7'; // Light green
+                      default:
+                        return '#bdbdbd';
+                    }
+                  }}
+                  maskColor="rgba(0, 0, 0, 0.1)"
+                />
+                <Background
+                  variant="dots"
+                  gap={16}
+                  size={1}
+                />
+              </ReactFlow>
+            </Box>
           </Box>
         </ReactFlowProvider>
       </Paper>
@@ -639,27 +664,6 @@ const SpiderBuilder = () => {
           </Box>
         )}
       </Drawer>
-
-      {/* Node palette */}
-      {paletteOpen && (
-        <Drawer
-          variant="permanent"
-          anchor="left"
-          PaperProps={{
-            sx: {
-              width: 200,
-              position: 'absolute',
-              height: 'calc(100% - 16px)',
-              top: 8,
-              left: 8,
-              borderRadius: 1,
-              zIndex: 1
-            }
-          }}
-        >
-          <NodePalette />
-        </Drawer>
-      )}
 
       <Snackbar
         open={snackbar.open}
