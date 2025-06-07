@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -11,16 +11,43 @@ import {
   InputBase,
   alpha,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Menu,
+  MenuItem,
+  Divider
 } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import SearchIcon from '@mui/icons-material/Search';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import MenuIcon from '@mui/icons-material/Menu';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Header = ({ onMenuClick, isMobile }) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // User menu state
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+
+  const handleOpenUserMenu = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCloseUserMenu = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    handleCloseUserMenu();
+    logout();
+    navigate('/login');
+  };
 
   return (
     <AppBar
@@ -102,29 +129,57 @@ const Header = ({ onMenuClick, isMobile }) => {
           )}
 
           <Tooltip title="Notifications">
-            <IconButton color="inherit" size="small" sx={{ mr: 2 }}>
-              <Badge badgeContent={4} color="error" sx={{ '& .MuiBadge-badge': { fontSize: 9, height: 16, minWidth: 16 } }}>
+            <IconButton color="inherit" size="small" sx={{ mr: 1 }}>
+              <Badge badgeContent={4} color="error">
                 <NotificationsIcon />
               </Badge>
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="John Doe">
-            <Avatar
-              sx={{
-                width: { xs: 28, sm: 32 },
-                height: { xs: 28, sm: 32 },
-                bgcolor: 'primary.main',
-                fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                cursor: 'pointer',
-                '&:hover': {
-                  boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.2)'
-                }
-              }}
+          <Tooltip title="Account">
+            <IconButton
+              onClick={handleOpenUserMenu}
+              size="small"
+              sx={{ ml: 1 }}
+              aria-controls={open ? 'user-menu' : undefined}
+              aria-haspopup="true"
+              aria-expanded={open ? 'true' : undefined}
             >
-              JD
-            </Avatar>
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                <AccountCircleIcon />
+              </Avatar>
+            </IconButton>
           </Tooltip>
+
+          {/* User menu */}
+          <Menu
+            id="user-menu"
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleCloseUserMenu}
+            MenuListProps={{
+              'aria-labelledby': 'user-button',
+            }}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem disabled>
+              <Typography variant="body2">
+                {user?.username || 'User'}
+              </Typography>
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={handleLogout}>
+              <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
+              Logout
+            </MenuItem>
+          </Menu>
         </Box>
       </Toolbar>
     </AppBar>

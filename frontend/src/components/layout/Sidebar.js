@@ -17,8 +17,9 @@ import CodeIcon from '@mui/icons-material/Code';
 import AddIcon from '@mui/icons-material/Add';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import SettingsIcon from '@mui/icons-material/Settings';
-import BugReportIcon from '@mui/icons-material/BugReport';
 import CloseIcon from '@mui/icons-material/Close';
+// Import the custom logo
+import logo from '../../assets/images/logo.svg';
 
 const drawerWidth = 240;
 
@@ -47,8 +48,8 @@ const Sidebar = ({ onClose }) => {
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <BugReportIcon sx={{ mr: 1, fontSize: 28 }} />
-          <Typography variant="h6" fontWeight="bold">BirdScrapyd</Typography>
+          <img src={logo} alt="PIRAT Logo" style={{ height: 32, marginRight: 8 }} />
+          <Typography variant="h6" fontWeight="bold">PIRAT</Typography>
         </Box>
 
         {onClose && (

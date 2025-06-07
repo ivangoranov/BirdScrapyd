@@ -14,6 +14,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Standalone functions for API endpoints
+def get_all_spiders(db):
+    """Get all spider configurations from the database"""
+    return db.query(Spider).all()
+
+def get_spider_jobs(db, spider_id=None):
+    """Get all jobs for a specific spider or all spiders"""
+    query = db.query(SpiderExecution)
+    if spider_id:
+        query = query.filter(SpiderExecution.spider_id == spider_id)
+    return query.order_by(SpiderExecution.started_at.desc()).all()
+
 class SpiderService:
     """Service for managing Scrapy spiders"""
 

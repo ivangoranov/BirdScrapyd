@@ -64,8 +64,8 @@ def get_recent_jobs(limit: int = 5, db: Session = Depends(get_db)):
     Get a list of recent jobs with their status
     """
     try:
-        # Query for recent jobs ordered by start time
-        recent_jobs = db.query(Job).order_by(Job.start_time.desc()).limit(limit).all()
+        # Query for recent jobs ordered by started_at (not start_time)
+        recent_jobs = db.query(Job).order_by(Job.started_at.desc()).limit(limit).all()
 
         # Format the job data
         jobs_data = []
@@ -83,7 +83,7 @@ def get_recent_jobs(limit: int = 5, db: Session = Depends(get_db)):
                 "status": job.status,
                 "items": job.items_scraped or 0,
                 "time": time_ago,
-                "progress": job.progress or (100 if job.status == "completed" else 0)
+                "progress": job.progress if hasattr(job, 'progress') else (100 if job.status == "completed" else 0)
             })
 
         return jobs_data

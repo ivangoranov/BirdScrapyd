@@ -1,10 +1,23 @@
-from sqlalchemy import Column, String, DateTime, JSON, Text, ForeignKey, Integer
+from sqlalchemy import Column, String, DateTime, JSON, Text, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import relationship, DeclarativeBase
 import datetime
 import uuid
 
 class Base(DeclarativeBase):
     pass
+
+class User(Base):
+    """SQLAlchemy model for user accounts"""
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_superuser = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.datetime.now)
 
 class Spider(Base):
     """SQLAlchemy model for spider configuration"""
@@ -34,3 +47,6 @@ class SpiderExecution(Base):
 
     # Relationship
     spider = relationship("Spider", backref="executions")
+
+# Add Job model as an alias for SpiderExecution to maintain compatibility
+Job = SpiderExecution

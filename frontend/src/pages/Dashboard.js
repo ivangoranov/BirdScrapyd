@@ -47,7 +47,10 @@ const mockRecentJobs = [
 const statusColors = {
   completed: { bg: '#e8f5e9', color: '#2e7d32' },
   running: { bg: '#e3f2fd', color: '#1565c0' },
-  error: { bg: '#ffebee', color: '#c62828' }
+  error: { bg: '#ffebee', color: '#c62828' },
+  finished: { bg: '#e8f5e9', color: '#2e7d32' }, // Alias for completed
+  idle: { bg: '#f5f5f5', color: '#757575' },     // For idle spiders
+  default: { bg: '#f5f5f5', color: '#757575' }   // Default for any unknown status
 };
 
 const Dashboard = () => {
@@ -400,8 +403,8 @@ const Dashboard = () => {
                           size="small"
                           label={job.status}
                           sx={{
-                            bgcolor: statusColors[job.status].bg,
-                            color: statusColors[job.status].color,
+                            bgcolor: (statusColors[job.status] || statusColors.default).bg,
+                            color: (statusColors[job.status] || statusColors.default).color,
                             fontSize: '0.7rem',
                             height: 24
                           }}
