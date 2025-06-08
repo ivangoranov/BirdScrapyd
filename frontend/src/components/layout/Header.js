@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -24,16 +24,37 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import logo from '../../assets/images/logo.svg';
 
 const Header = ({ onMenuClick, isMobile }) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   // User menu state
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
+
+  // Detect color scheme
+  useEffect(() => {
+    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateTheme = (e) => {
+      setIsDarkMode(e.matches);
+    };
+
+    // Set initial value
+    setIsDarkMode(darkModeMediaQuery.matches);
+
+    // Add listener for changes
+    darkModeMediaQuery.addEventListener('change', updateTheme);
+
+    // Cleanup
+    return () => {
+      darkModeMediaQuery.removeEventListener('change', updateTheme);
+    };
+  }, []);
 
   const handleOpenUserMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -60,24 +81,33 @@ const Header = ({ onMenuClick, isMobile }) => {
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
-        {isMobile && (
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={onMenuClick}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-        )}
+        {/* Remove the isMobile condition to make the button always visible */}
+        <IconButton
+          color="inherit"
+          edge="start"
+          onClick={onMenuClick}
+          sx={{ mr: 2 }}
+        >
+          <MenuIcon />
+        </IconButton>
 
         <Typography
           variant="h6"
           component="div"
           color="primary.main"
           fontWeight="500"
-          sx={{ display: 'flex' }}
+          sx={{ display: 'flex', alignItems: 'center' }}
         >
+          <Box
+            component="img"
+            src={isDarkMode ? logo : `/logo-dark-bg.svg`}
+            alt="Logo"
+            sx={{
+              height: 40,
+              marginRight: 1.5,
+              filter: isDarkMode ? 'none' : 'drop-shadow(0px 0px 1px rgba(0,0,0,0.3))'
+            }}
+          />
           Spider Builder
         </Typography>
 

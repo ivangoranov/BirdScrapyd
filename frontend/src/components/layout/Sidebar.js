@@ -1,7 +1,6 @@
 import React from 'react';
 import {Link, useLocation} from 'react-router-dom';
 import {
-    Drawer,
     List,
     ListItem,
     ListItemIcon,
@@ -18,12 +17,11 @@ import AddIcon from '@mui/icons-material/Add';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
-// Import the custom logo
-import logo from '../../assets/images/logo.svg';
+import MenuIcon from '@mui/icons-material/Menu';
 
 const drawerWidth = 240;
 
-const Sidebar = ({onClose}) => {
+const Sidebar = ({onClose, onToggle}) => {
     const location = useLocation();
 
     const menuItems = [
@@ -41,18 +39,28 @@ const Sidebar = ({onClose}) => {
                     height: 70,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: onClose ? 'space-between' : 'center',
+                    justifyContent: 'space-between',
                     backgroundColor: 'primary.main',
                     color: 'white',
-                    px: onClose ? 2 : 0
+                    px: 2
                 }}
             >
                 <Box sx={{display: 'flex', alignItems: 'center', height: 1}}>
-                    <img
-                        src={logo}
-                        alt="PIRAT Logo"
-                        style={{height: '100%', maxHeight: 70, marginRight: 8, width: 'auto'}}
-                    />
+                    {onToggle && (
+                        <IconButton
+                            onClick={onToggle}
+                            sx={{
+                                color: 'white',
+                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                                '&:hover': {
+                                    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                                }
+                            }}
+                            size="medium"
+                        >
+                            <MenuIcon />
+                        </IconButton>
+                    )}
                 </Box>
 
                 {onClose && (

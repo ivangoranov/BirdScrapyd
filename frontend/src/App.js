@@ -4,8 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Box, Container, useMediaQuery, IconButton, Drawer } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import { Box, Container, useMediaQuery, Drawer } from '@mui/material';
 
 // Import theme
 import theme from './theme';
@@ -46,36 +45,28 @@ const ProtectedRoute = ({ children }) => {
 // Layout wrapper for authenticated routes
 const AuthenticatedLayout = ({ children }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+    setSidebarOpen(!sidebarOpen);
   };
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      {/* Mobile sidebar */}
-      {isMobile ? (
-        <>
-          <Drawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={handleDrawerToggle}
-            ModalProps={{
-              keepMounted: true, // Better open performance on mobile
-            }}
-            sx={{
-              '& .MuiDrawer-paper': { width: 240 },
-              display: { xs: 'block', md: 'none' },
-            }}
-          >
-            <Sidebar onClose={handleDrawerToggle} />
-          </Drawer>
-        </>
-      ) : (
-        // Desktop sidebar
-        <Sidebar />
-      )}
+      {/* Sidebar - same implementation for both mobile and desktop */}
+      <Drawer
+        variant={isMobile ? "temporary" : "persistent"}
+        open={sidebarOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile
+        }}
+        sx={{
+          '& .MuiDrawer-paper': { width: 240 },
+        }}
+      >
+        <Sidebar onClose={isMobile ? handleDrawerToggle : undefined} onToggle={handleDrawerToggle} />
+      </Drawer>
 
       {/* Main content area */}
       <Box sx={{
@@ -83,7 +74,7 @@ const AuthenticatedLayout = ({ children }) => {
         flexDirection: 'column',
         flexGrow: 1,
         overflow: 'hidden',
-        width: { xs: '100%', md: `calc(100% - 240px)` }
+        width: '100%'
       }}>
         <Header onMenuClick={handleDrawerToggle} isMobile={isMobile} />
         <Box
