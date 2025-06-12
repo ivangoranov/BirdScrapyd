@@ -1,26 +1,31 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+"""Database configuration module"""
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator
 import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///birdscrapyd.db")
 
-# Database connection settings
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", "sqlite:///./birdscrapyd.db"
-)
+# Create database engine
+engine = create_engine(DATABASE_URL)
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
-)
+# Create SessionLocal class for database sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
+# Export func for aggregate operations
+sql = func
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency function to get a database session.
+    This should be used with FastAPI's dependency injection system.
+    Returns a database session and ensures it's closed after use.
+    """
     try:
+        db = SessionLocal()
         yield db
     finally:
         db.close()
+
+# Export SessionLocal, get_db, and sql
+__all__ = ["SessionLocal", "get_db", "sql"]

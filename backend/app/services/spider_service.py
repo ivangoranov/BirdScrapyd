@@ -1,8 +1,12 @@
-from typing import List, Dict, Any, Tuple, Optional
-from app.models.models import Spider, SpiderExecution
-from app.schemas.spider import SpiderCreate, SpiderUpdate, SpiderConfig, SpiderStatus
-from app.db.database import SessionLocal
-from app.api.api_v1.endpoints.websocket import manager
+from typing import List, Dict, Tuple, Optional
+from sqlalchemy.orm import Session
+from app.models import Spider, SpiderExecution
+from app.schemas import (
+    SpiderCreate, SpiderUpdate, SpiderConfig, SpiderStatus,
+    UrlAnalysisResponse, SelectorInfo
+)
+from app.db import SessionLocal
+from app.api import manager
 import asyncio
 import json
 import os
@@ -15,11 +19,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Standalone functions for API endpoints
-def get_all_spiders(db):
+def get_all_spiders(db: Session) -> List[Spider]:
     """Get all spider configurations from the database"""
     return db.query(Spider).all()
 
-def get_spider_jobs(db, spider_id=None):
+def get_spider_jobs(db: Session, spider_id: Optional[str] = None) -> List[SpiderExecution]:
     """Get all jobs for a specific spider or all spiders"""
     query = db.query(SpiderExecution)
     if spider_id:
@@ -461,6 +465,104 @@ class SpiderService:
             }
         finally:
             db.close()
+
+    async def analyze_url(self, url: str) -> UrlAnalysisResponse:
+        """Analyze a URL and extract possible selectors"""
+        import aiohttp
+        from bs4 import BeautifulSoup
+        from collections import defaultdict
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                async with session.get(url, headers=headers, timeout=10) as response:
+                    if response.status != 200:
+                        return UrlAnalysisResponse(
+                            url=url,
+                            status="error",
+                            available_selectors=[],
+                            page_title=None
+                        )
+
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    available_selectors = []
+
+                    # Analyze common elements
+                    elements_to_analyze = {
+                        'links': {'tag': 'a', 'attribute': 'href'},
+                        'images': {'tag': 'img', 'attribute': 'src'},
+                        'text_blocks': {'tag': ['p', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']},
+                        'lists': {'tag': ['ul', 'ol']},
+                        'tables': {'tag': 'table'}
+                    }
+
+                    for element_type, config in elements_to_analyze.items():
+                        elements = soup.find_all(config['tag'])
+                        if elements:
+                            # CSS selector
+                            css_selector = self._generate_css_selector(elements[0])
+                            sample_values = []
+                            if 'attribute' in config:
+                                sample_values = [e.get(config['attribute']) for e in elements[:3] if e.get(config['attribute'])]
+                            else:
+                                sample_values = [e.get_text().strip() for e in elements[:3] if e.get_text().strip()]
+
+                            available_selectors.append(SelectorInfo(
+                                selector=css_selector,
+                                type='css',
+                                count=len(elements),
+                                sample_values=sample_values,
+                                element_type=element_type
+                            ))
+
+                            # XPath selector
+                            xpath_selector = self._generate_xpath_selector(elements[0])
+                            available_selectors.append(SelectorInfo(
+                                selector=xpath_selector,
+                                type='xpath',
+                                count=len(elements),
+                                sample_values=sample_values,
+                                element_type=element_type
+                            ))
+
+                    return UrlAnalysisResponse(
+                        url=url,
+                        status="success",
+                        available_selectors=available_selectors,
+                        page_title=soup.title.string if soup.title else None
+                    )
+
+            except Exception as e:
+                logger.error(f"Error analyzing URL {url}: {str(e)}")
+                return UrlAnalysisResponse(
+                    url=url,
+                    status="error",
+                    available_selectors=[],
+                    page_title=None
+                )
+
+    def _generate_css_selector(self, element) -> str:
+        """Generate a CSS selector for a given element"""
+        classes = element.get('class', [])
+        if classes:
+            return f"{element.name}.{'.'.join(classes)}"
+        elif element.get('id'):
+            return f"#{element.get('id')}"
+        else:
+            return element.name
+
+    def _generate_xpath_selector(self, element) -> str:
+        """Generate an XPath selector for a given element"""
+        classes = element.get('class', [])
+        if classes:
+            return f"//{element.name}[contains(@class, '{' '.join(classes)}')]"
+        elif element.get('id'):
+            return f"//{element.name}[@id='{element.get('id')}']"
+        else:
+            return f"//{element.name}"
 
     def _generate_spider_code(self, spider):
         """Generate a Scrapy spider Python code from the spider configuration"""

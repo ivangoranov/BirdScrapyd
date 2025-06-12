@@ -160,7 +160,7 @@ export const cancelJob = (jobId) => {
   });
 };
 
-export default {
+const api = {
   getDashboardStats,
   getRecentJobs,
   getSpiders,
@@ -177,3 +177,5 @@ export default {
   signup,
   loginWithSocial,
 };
+
+export default api;

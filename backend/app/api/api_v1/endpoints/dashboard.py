@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from sqlalchemy import and_
+from typing import Dict, Any, List
 
-from app.db.database import get_db
-from app.models.models import Spider, Job
+from app.db.database import get_db, sql
+from app.models import Spider, SpiderExecution
 from app.services.spider_service import get_all_spiders, get_spider_jobs
 
 router = APIRouter()
+
 
 @router.get("/stats")
 def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -22,78 +24,66 @@ def get_dashboard_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         spiders = get_all_spiders(db)
         total_spiders = len(spiders)
 
-        # Count running spiders (assuming a status field or similar exists)
-        running_spiders = 0
-        for spider in spiders:
-            # Check if there's an active job for this spider
-            active_jobs = db.query(Job).filter(
-                Job.spider_id == spider.id,
-                Job.status == "running"
-            ).count()
-            if active_jobs > 0:
-                running_spiders += 1
+        # Count running spiders
+        running_spiders = sum(1 for spider in spiders if spider.status == "running")
 
-        # Count completed jobs
-        completed_jobs = db.query(Job).filter(Job.status == "completed").count()
-
-        # Count total items scraped (assuming there's an items_scraped field)
-        items_scraped = db.query(Job).filter(Job.status == "completed").with_entities(
-            db.func.sum(Job.items_scraped)
-        ).scalar() or 0
+        # Get job statistics using SQLAlchemy expressions
+        completed_jobs = (
+            db.query(SpiderExecution)
+            .filter(SpiderExecution.status == "finished")
+            .count()
+        )
+        total_items = (
+                db.query(sql.sum(SpiderExecution.items_scraped))
+                .scalar() or 0
+        )
 
         return {
-            "totalSpiders": total_spiders,
-            "runningSpiders": running_spiders,
-            "completedJobs": completed_jobs,
-            "itemsScraped": int(items_scraped)
+            "total_spiders": total_spiders,
+            "running_spiders": running_spiders,
+            "completed_jobs": completed_jobs,
+            "total_items_scraped": total_items
         }
+
     except Exception as e:
-        # For debugging, log the error
-        print(f"Error getting dashboard stats: {str(e)}")
-        # Return mock data during development
-        return {
-            "totalSpiders": 12,
-            "runningSpiders": 3,
-            "completedJobs": 145,
-            "itemsScraped": 32876
-        }
+        raise Exception(f"Error getting dashboard stats: {str(e)}")
+
 
 @router.get("/recent-jobs")
-def get_recent_jobs(limit: int = 5, db: Session = Depends(get_db)):
-    """
-    Get a list of recent jobs with their status
-    """
+def get_recent_jobs(db: Session = Depends(get_db), limit: int = 5) -> List[Dict[str, Any]]:
+    """Get the most recent spider jobs with their associated spider information"""
     try:
-        # Query for recent jobs ordered by started_at (not start_time)
-        recent_jobs = db.query(Job).order_by(Job.started_at.desc()).limit(limit).all()
+        # Get recent jobs
+        recent_jobs = (
+            db.query(SpiderExecution)
+            .order_by(SpiderExecution.started_at.desc())
+            .limit(limit)
+            .all()
+        )
 
-        # Format the job data
-        jobs_data = []
+        # Prepare response with spider information
+        result = []
         for job in recent_jobs:
-            # Get spider name
-            spider = db.query(Spider).filter(Spider.id == job.spider_id).first()
-            spider_name = spider.name if spider else "Unknown Spider"
+            # Get associated spider information using SQLAlchemy expression
+            spider = (
+                db.query(Spider)
+                .filter(and_(Spider.id == job.spider_id))
+                .first()
+            )
 
-            # Format time ago (this is a placeholder - implement proper time formatting)
-            time_ago = "Recently"  # Replace with actual time formatting
+            if spider:
+                result.append({
+                    "job_id": job.id,
+                    "spider_id": job.spider_id,
+                    "spider_name": spider.name,
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "finished_at": job.finished_at,
+                    "items_scraped": job.items_scraped,
+                    "error_message": job.error_message
+                })
 
-            jobs_data.append({
-                "id": job.id,
-                "name": spider_name,
-                "status": job.status,
-                "items": job.items_scraped or 0,
-                "time": time_ago,
-                "progress": job.progress if hasattr(job, 'progress') else (100 if job.status == "completed" else 0)
-            })
+        return result
 
-        return jobs_data
     except Exception as e:
-        # For debugging, log the error
-        print(f"Error getting recent jobs: {str(e)}")
-        # Return mock data during development
-        return [
-            {"id": "1", "name": "Product Spider", "status": "completed", "items": 234, "time": "2 hours ago", "progress": 100},
-            {"id": "2", "name": "News Spider", "status": "running", "items": 56, "time": "Just now", "progress": 45},
-            {"id": "3", "name": "Blog Spider", "status": "error", "items": 0, "time": "1 day ago", "progress": 23},
-            {"id": "4", "name": "Review Spider", "status": "completed", "items": 128, "time": "3 days ago", "progress": 100}
-        ]
+        raise Exception(f"Error getting recent jobs: {str(e)}")

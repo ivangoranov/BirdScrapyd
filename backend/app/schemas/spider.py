@@ -45,3 +45,27 @@ class SpiderStatus(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
     model_config = ConfigDict(from_attributes=True)
+
+class UrlValidationRequest(BaseModel):
+    """Schema for URL validation request"""
+    url: str
+
+class SelectorInfo(BaseModel):
+    """Schema for selector information"""
+    selector: str
+    type: str  # 'css' or 'xpath'
+    count: int
+    sample_values: List[str]
+    element_type: str  # 'text', 'link', 'image', etc.
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UrlAnalysisResponse(BaseModel):
+    """Schema for URL analysis response"""
+    url: str
+    status: str
+    available_selectors: List[SelectorInfo]
+    page_title: Optional[str]
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+    model_config = ConfigDict(from_attributes=True)

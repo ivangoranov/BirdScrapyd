@@ -18,27 +18,17 @@ import {
   Grid,
   IconButton,
   Drawer,
-  List,
-  ListItem,
-  ListItemText,
   Snackbar,
   Alert,
   useMediaQuery,
-  useTheme,
-  Fab,
-  Tooltip,
-  Stack
+  useTheme
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
-import SettingsIcon from '@mui/icons-material/Settings';
 import AddIcon from '@mui/icons-material/Add';
 import PaletteIcon from '@mui/icons-material/Palette';
-import ZoomInIcon from '@mui/icons-material/ZoomIn';
-import ZoomOutIcon from '@mui/icons-material/ZoomOut';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useForm } from 'react-hook-form';
 import axios from 'axios';
 
@@ -75,7 +65,10 @@ const SpiderBuilder = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(!!id);
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const [analyzedSelectors, setAnalyzedSelectors] = useState({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const { formState: { errors: formErrors }, handleSubmit: onSubmit, register: registerField } = useForm();
+  const [urlValidities, setUrlValidities] = useState([]);
 
   // Fetch spider data if editing an existing spider
   useEffect(() => {
@@ -150,11 +143,74 @@ const SpiderBuilder = () => {
     setStartUrls([...startUrls, '']);
   };
 
-  // Update URL at specific index
+  // URL validation and analysis
+  const isValidUrl = (url) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Analyze URL automatically when a valid URL is entered
+  const analyzeUrl = async (url, index) => {
+    if (!isValidUrl(url) || analyzing) return;
+
+    try {
+      setAnalyzing(true);
+      console.log('Analyzing URL:', url);
+      const response = await axios.post(`${API_URL}/spiders/analyze-url`, { url });
+      console.log('Analysis response:', response.data);
+
+      // Handle different response formats
+      let selectors = [];
+      if (Array.isArray(response.data)) {
+        selectors = response.data;
+      } else if (response.data.selectors) {
+        selectors = response.data.selectors;
+      } else if (typeof response.data === 'object') {
+        // If response is an object with element types as keys
+        selectors = Object.entries(response.data).flatMap(([type, elements]) =>
+          Array.isArray(elements) ? elements.map(el => ({ ...el, element_type: type })) : []
+        );
+      }
+
+      setAnalyzedSelectors(prev => ({
+        ...prev,
+        [url]: selectors.map(selector => ({
+          ...selector,
+          type: selector.type || 'css',
+          element_type: selector.element_type || 'element',
+          label: selector.label || selector.sample?.substring(0, 30) || 'Element'
+        }))
+      }));
+    } catch (error) {
+      console.error('Error analyzing URL:', error);
+      setSnackbar({
+        open: true,
+        message: `Error analyzing URL: ${error.response?.data?.detail || error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  // Update URL and trigger analysis
   const handleUrlChange = (index, value) => {
     const newUrls = [...startUrls];
     newUrls[index] = value;
     setStartUrls(newUrls);
+
+    // Debounce URL analysis
+    const timeoutId = setTimeout(() => {
+      if (isValidUrl(value)) {
+        analyzeUrl(value, index);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
   };
 
   // Remove URL at specific index
@@ -221,6 +277,7 @@ const SpiderBuilder = () => {
 
       const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
       const type = event.dataTransfer.getData('application/reactflow');
+      const config = event.dataTransfer.getData('node/config');
 
       if (!type) return;
 
@@ -230,48 +287,39 @@ const SpiderBuilder = () => {
       });
 
       const nodeId = uuidv4();
+      let nodeConfig = {};
 
-      // Create appropriate node based on type
-      let newNode = {};
-
-      switch (type) {
-        case 'selectorNode':
-          newNode = {
-            id: nodeId,
-            type,
-            position,
-            data: {
-              label: 'Selector',
-              params: { selector_type: 'css', selector: '' }
-            }
-          };
-          break;
-        case 'processorNode':
-          newNode = {
-            id: nodeId,
-            type,
-            position,
-            data: {
-              label: 'Processor',
-              params: { processor_type: 'extract' }
-            }
-          };
-          break;
-        case 'outputNode':
-          newNode = {
-            id: nodeId,
-            type,
-            position,
-            data: {
-              label: 'Output',
-              params: { field_name: 'data' }
-            }
-          };
-          break;
-        default:
-          return;
+      try {
+        nodeConfig = config ? JSON.parse(config) : {};
+      } catch (e) {
+        console.error('Error parsing node config:', e);
       }
 
+      // Create a new node with proper visual representation
+      const newNode = {
+        id: nodeId,
+        type: 'selectorNode', // Always use selectorNode type for the visual component
+        position,
+        data: {
+          label: nodeConfig.label || nodeConfig.element_type || 'Selector',
+          params: {
+            selector_type: nodeConfig.type || 'css',
+            selector: nodeConfig.selector || '',
+            element_type: nodeConfig.element_type || 'text',
+            sample: nodeConfig.sample || ''
+          },
+          // Add visual properties for rendering
+          style: {
+            background: '#1565c0',
+            color: 'white',
+            border: '1px solid #90caf9',
+            borderRadius: '4px',
+            padding: '10px'
+          }
+        }
+      };
+
+      console.log('Created new node:', newNode); // Debug log
       setElements(els => [...els, newNode]);
     },
     [reactFlowInstance]
@@ -314,8 +362,13 @@ const SpiderBuilder = () => {
       start_urls: startUrls.filter(url => url.trim()),
       blocks: nodes.map(node => ({
         id: node.id,
-        type: node.data.label,
-        params: node.data.params || {},
+        type: 'Selector', // All analyzed elements are Selector blocks
+        params: {
+          ...node.data.params,
+          next: elements
+            .filter(el => el.source === node.id)
+            .map(el => el.target)
+        },
         position: node.position
       })),
       settings: {}
@@ -386,8 +439,19 @@ const SpiderBuilder = () => {
     }
   };
 
+  // Get all analyzed selectors for display
+  const getAllAnalyzedSelectors = () => {
+    console.log('Current analyzedSelectors:', analyzedSelectors); // Debug log
+    if (!analyzedSelectors || Object.keys(analyzedSelectors).length === 0) return [];
+    const allSelectors = Object.values(analyzedSelectors).reduce((acc, selectors) => {
+      return acc.concat(Array.isArray(selectors) ? selectors : []);
+    }, []);
+    console.log('All selectors:', allSelectors); // Debug log
+    return allSelectors;
+  };
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Spider configuration */}
       <Paper sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2} alignItems="center">
@@ -408,13 +472,14 @@ const SpiderBuilder = () => {
             </Typography>
 
             {startUrls.map((url, index) => (
-              <Box key={index} sx={{ display: 'flex', mb: 1 }}>
+              <Box key={index} sx={{ display: 'flex', mb: 1, gap: 1 }}>
                 <TextField
                   fullWidth
                   label={`URL ${index + 1}`}
                   value={url}
                   onChange={(e) => handleUrlChange(index, e.target.value)}
-                  sx={{ mr: 1 }}
+                  error={url.trim() !== '' && !isValidUrl(url)}
+                  helperText={url.trim() !== '' && !isValidUrl(url) ? 'Invalid URL' : analyzing ? 'Analyzing...' : ''}
                 />
                 <IconButton
                   color="error"
@@ -480,12 +545,15 @@ const SpiderBuilder = () => {
           <Box sx={{ display: 'flex', height: '100%', width: '100%' }}>
             {paletteOpen && (
               <Box sx={{
-                width: 200,
+                width: 280,
                 height: '100%',
                 zIndex: 1,
                 mr: 1
               }}>
-                <NodePalette />
+                <NodePalette
+                  analyzedSelectors={getAllAnalyzedSelectors()}
+                  key={JSON.stringify(analyzedSelectors)} // Force re-render when selectors change
+                />
               </Box>
             )}
             <Box
