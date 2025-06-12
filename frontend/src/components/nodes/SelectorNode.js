@@ -1,86 +1,71 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Handle } from 'react-flow-renderer';
-import { Box, Typography, Tooltip, Paper } from '@mui/material';
-import CodeIcon from '@mui/icons-material/Code';
+import { useTheme, useMediaQuery } from '@mui/material';
 
-/**
- * SelectorNode component for React Flow
- * Represents a Scrapy selector (e.g., XPath, CSS)
- */
-const SelectorNode = ({ data }) => {
-  const selector = data.params?.selector || 'No selector defined';
-  const selectorType = data.params?.selector_type || 'css';
-  const sample = data.params?.sample || '';
+const SelectorNode = memo(({ data }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   return (
-    <Paper
-      elevation={2}
-      sx={{
-        p: 1.5,
-        bgcolor: '#1565c0',
+    <div
+      style={{
+        background: '#1565c0',
         color: 'white',
-        borderRadius: 1,
-        minWidth: 180,
-        maxWidth: 250
+        padding: isMobile ? '15px' : '10px',
+        borderRadius: '6px',
+        width: isMobile ? '180px' : '150px',
+        fontSize: isMobile ? '16px' : '14px',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+        touchAction: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
       }}
     >
       <Handle
         type="target"
         position="left"
-        style={{ background: '#90caf9' }}
+        id="in"
+        style={{
+          background: '#fff',
+          width: isMobile ? '12px' : '8px',
+          height: isMobile ? '12px' : '8px',
+          borderRadius: '50%',
+          border: '2px solid #1565c0',
+        }}
       />
-
-      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          mb: 1
-        }}>
-          <CodeIcon fontSize="small" />
-          <Typography variant="subtitle2">
-            {data.label || 'Selector'}
-          </Typography>
-        </Box>
-
-        <Tooltip
-          title={
-            <Box>
-              <Typography variant="caption" component="div">
-                <strong>Selector ({selectorType}):</strong> {selector}
-              </Typography>
-              {sample && (
-                <Typography variant="caption" component="div">
-                  <strong>Sample:</strong> {sample}
-                </Typography>
-              )}
-            </Box>
-          }
-          arrow
-          placement="top"
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              fontSize: '0.8rem',
-              opacity: 0.9,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {selector}
-          </Typography>
-        </Tooltip>
-      </Box>
-
+      <div style={{
+        fontWeight: 500,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }}>
+        {data?.label || 'Selector'}
+      </div>
+      <div style={{
+        fontSize: isMobile ? '12px' : '10px',
+        marginTop: '5px',
+        opacity: 0.8,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }}>
+        {data?.params?.selector || ''}
+      </div>
       <Handle
         type="source"
         position="right"
-        style={{ background: '#90caf9' }}
+        id="out"
+        style={{
+          background: '#fff',
+          width: isMobile ? '12px' : '8px',
+          height: isMobile ? '12px' : '8px',
+          borderRadius: '50%',
+          border: '2px solid #1565c0',
+        }}
       />
-    </Paper>
+    </div>
   );
-};
+});
 
 export default SelectorNode;

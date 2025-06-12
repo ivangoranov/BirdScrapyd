@@ -106,7 +106,7 @@ describe('SpiderBuilder Component', () => {
 
     // Check if it's fetching the spider data
     await waitFor(() => {
-      expect(axios.get).toHaveBeenCalledWith('http://localhost:8000/api/v1/spiders/test-id');
+      expect(axios.get).toHaveBeenCalledWith('http://localhost:8001/api/v1/spiders/test-id');
     });
 
     // Check if the form is populated with the spider data
@@ -166,7 +166,7 @@ describe('SpiderBuilder Component', () => {
     // Check if PUT request was made with updated data
     await waitFor(() => {
       expect(axios.put).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/spiders/test-id',
+        'http://localhost:8001/api/v1/spiders/test-id',
         expect.objectContaining({
           name: 'Updated Spider',
           start_urls: ['https://example.com']
@@ -226,7 +226,7 @@ describe('SpiderBuilder Component', () => {
 
     // Check if POST request was made
     await waitFor(() => {
-      expect(axios.post).toHaveBeenCalledWith('http://localhost:8000/api/v1/spiders/test-id/run');
+      expect(axios.post).toHaveBeenCalledWith('http://localhost:8001/api/v1/spiders/test-id/run');
     });
 
     // Check for success message
@@ -295,7 +295,7 @@ describe('SpiderBuilder Component', () => {
 
     await waitFor(() => {
       expect(axios.put).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/spiders/test-id',
+        'http://localhost:8001/api/v1/spiders/test-id',
         expect.objectContaining({
           blocks: expect.arrayContaining([
             expect.objectContaining({

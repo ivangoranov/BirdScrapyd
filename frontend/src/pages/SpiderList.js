@@ -25,7 +25,7 @@ import AddIcon from '@mui/icons-material/Add';
 import axios from 'axios';
 
 // API endpoint
-const API_URL = 'http://localhost:8000/api/v1';
+const API_URL = 'http://localhost:8001/api/v1';
 
 const SpiderList = () => {
   const [spiders, setSpiders] = useState([]);

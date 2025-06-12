@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactFlow, {
-  addEdge,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
-  ReactFlowProvider,
+  addEdge,
+  useNodesState,
+  useEdgesState,
 } from 'react-flow-renderer';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -29,23 +31,18 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import AddIcon from '@mui/icons-material/Add';
 import PaletteIcon from '@mui/icons-material/Palette';
-import { useForm } from 'react-hook-form';
 import axios from 'axios';
 
 // Custom node components
 import SelectorNode from '../components/nodes/SelectorNode';
-import ProcessorNode from '../components/nodes/ProcessorNode';
-import OutputNode from '../components/nodes/OutputNode';
 import NodePalette from '../components/nodes/NodePalette';
 
 // API endpoint
-const API_URL = 'http://localhost:8000/api/v1';
+const API_URL = 'http://localhost:8001/api/v1';
 
-// Custom node types for React Flow
+// Define node types explicitly
 const nodeTypes = {
-  selectorNode: SelectorNode,
-  processorNode: ProcessorNode,
-  outputNode: OutputNode,
+  selectorNode: SelectorNode
 };
 
 const SpiderBuilder = () => {
@@ -54,9 +51,19 @@ const SpiderBuilder = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Add touch device detection
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  // React Flow instance ref and state
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
-  const [elements, setElements] = useState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(!isMobile);
@@ -67,8 +74,6 @@ const SpiderBuilder = () => {
   const [isEditMode, setIsEditMode] = useState(!!id);
   const [analyzedSelectors, setAnalyzedSelectors] = useState({});
   const [analyzing, setAnalyzing] = useState(false);
-  const { formState: { errors: formErrors }, handleSubmit: onSubmit, register: registerField } = useForm();
-  const [urlValidities, setUrlValidities] = useState([]);
 
   // Fetch spider data if editing an existing spider
   useEffect(() => {
@@ -113,7 +118,8 @@ const SpiderBuilder = () => {
             }
           });
 
-          setElements([...nodes, ...edges]);
+          setNodes([...nodes]);
+          setEdges([...edges]);
           setLoading(false);
         })
         .catch(error => {
@@ -126,7 +132,7 @@ const SpiderBuilder = () => {
           setLoading(false);
         });
     }
-  }, [id]);
+  }, [id, setNodes, setEdges]);
 
   // Helper function to get the correct node type for React Flow
   const getNodeType = (blockType) => {
@@ -154,7 +160,7 @@ const SpiderBuilder = () => {
   };
 
   // Analyze URL automatically when a valid URL is entered
-  const analyzeUrl = async (url, index) => {
+  const analyzeUrl = async (url) => {
     if (!isValidUrl(url) || analyzing) return;
 
     try {
@@ -234,7 +240,7 @@ const SpiderBuilder = () => {
 
   // Handle node update
   const handleNodeUpdate = (updatedParams) => {
-    setElements(els =>
+    setNodes(els =>
       els.map(el => {
         if (el.id === selectedNode.id) {
           return {
@@ -252,15 +258,15 @@ const SpiderBuilder = () => {
 
   // Handle node deletion
   const handleDeleteNode = (nodeId) => {
-    setElements(els => els.filter(el => el.id !== nodeId && el.source !== nodeId && el.target !== nodeId));
+    setNodes(els => els.filter(el => el.id !== nodeId));
     setSelectedNode(null);
     setDrawerOpen(false);
   };
 
   // Handle connection between nodes
   const onConnect = useCallback(
-    (params) => setElements(els => addEdge({ ...params, animated: true }, els)),
-    []
+    (params) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
   );
 
   // Handle adding a new node from the palette
@@ -269,60 +275,55 @@ const SpiderBuilder = () => {
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  // Modified onDrop for better mobile support
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      event.stopPropagation();
 
       if (!reactFlowInstance) return;
 
+      // Handle both touch and mouse events
+      const clientX = event.clientX || (event.touches ? event.touches[0].clientX : 0);
+      const clientY = event.clientY || (event.touches ? event.touches[0].clientY : 0);
+
       const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
       const type = event.dataTransfer.getData('application/reactflow');
-      const config = event.dataTransfer.getData('node/config');
+      const configStr = event.dataTransfer.getData('node/config');
 
       if (!type) return;
 
       const position = reactFlowInstance.project({
-        x: event.clientX - reactFlowBounds.left,
-        y: event.clientY - reactFlowBounds.top,
+        x: clientX - reactFlowBounds.left - (isMobile ? 50 : 75),
+        y: clientY - reactFlowBounds.top,
       });
 
-      const nodeId = uuidv4();
-      let nodeConfig = {};
-
+      let config = {};
       try {
-        nodeConfig = config ? JSON.parse(config) : {};
+        config = JSON.parse(configStr);
+        console.log('Parsed config:', config);
       } catch (e) {
-        console.error('Error parsing node config:', e);
+        console.error('Error parsing config:', e);
       }
 
-      // Create a new node with proper visual representation
       const newNode = {
-        id: nodeId,
-        type: 'selectorNode', // Always use selectorNode type for the visual component
+        id: uuidv4(),
+        type: 'selectorNode',
         position,
         data: {
-          label: nodeConfig.label || nodeConfig.element_type || 'Selector',
+          label: config.selector || 'Selector',
           params: {
-            selector_type: nodeConfig.type || 'css',
-            selector: nodeConfig.selector || '',
-            element_type: nodeConfig.element_type || 'text',
-            sample: nodeConfig.sample || ''
-          },
-          // Add visual properties for rendering
-          style: {
-            background: '#1565c0',
-            color: 'white',
-            border: '1px solid #90caf9',
-            borderRadius: '4px',
-            padding: '10px'
+            selector: config.selector || '',
+            selector_type: config.type || 'css',
+            element_type: config.element_type || 'text'
           }
         }
       };
 
-      console.log('Created new node:', newNode); // Debug log
-      setElements(els => [...els, newNode]);
+      console.log('Creating new node:', newNode);
+      setNodes((nds) => nds.concat(newNode));
     },
-    [reactFlowInstance]
+    [reactFlowInstance, setNodes, isMobile]
   );
 
   // Save the spider configuration
@@ -345,8 +346,6 @@ const SpiderBuilder = () => {
       return;
     }
 
-    // Get only nodes, not edges
-    const nodes = elements.filter(el => el.type);
     if (nodes.length === 0) {
       setSnackbar({
         open: true,
@@ -365,9 +364,9 @@ const SpiderBuilder = () => {
         type: 'Selector', // All analyzed elements are Selector blocks
         params: {
           ...node.data.params,
-          next: elements
-            .filter(el => el.source === node.id)
-            .map(el => el.target)
+          next: edges
+            .filter(edge => edge.source === node.id)
+            .map(edge => edge.target)
         },
         position: node.position
       })),
@@ -377,13 +376,10 @@ const SpiderBuilder = () => {
     setLoading(true);
 
     try {
-      let response;
       if (isEditMode) {
-        // Update existing spider
-        response = await axios.put(`${API_URL}/spiders/${id}`, spider);
+        await axios.put(`${API_URL}/spiders/${id}`, spider);
       } else {
-        // Create new spider
-        response = await axios.post(`${API_URL}/spiders/`, spider);
+        await axios.post(`${API_URL}/spiders/`, spider);
       }
 
       setSnackbar({
@@ -449,6 +445,15 @@ const SpiderBuilder = () => {
     console.log('All selectors:', allSelectors); // Debug log
     return allSelectors;
   };
+
+  // Mobile-optimized React Flow props
+  const defaultViewport = { x: 0, y: 0, zoom: isMobile ? 0.6 : 1 };
+  const nodesDraggable = !isMobile;
+  const zoomOnScroll = !isMobile;
+  const panOnDrag = !isMobile || isTouchDevice;
+  const zoomOnPinch = true;
+  const panOnScroll = false;
+  const preventScrolling = true;
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -560,56 +565,37 @@ const SpiderBuilder = () => {
               ref={reactFlowWrapper}
               sx={{
                 height: '100%',
-                flexGrow: 1
+                flexGrow: 1,
+                border: '1px solid #eee'
               }}
             >
               <ReactFlow
-                elements={elements}
-                nodeTypes={nodeTypes}
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                nodeTypes={nodeTypes}
                 onNodeClick={onNodeClick}
                 onDrop={onDrop}
                 onDragOver={onDragOver}
                 onInit={setReactFlowInstance}
-                snapToGrid={true}
-                snapGrid={[15, 15]}
-                defaultZoom={0.8}
+                fitView
+                defaultViewport={defaultViewport}
                 minZoom={0.2}
-                maxZoom={2}
+                maxZoom={4}
+                nodesDraggable={nodesDraggable}
+                zoomOnScroll={zoomOnScroll}
+                panOnDrag={panOnDrag}
+                zoomOnPinch={zoomOnPinch}
+                panOnScroll={panOnScroll}
+                preventScrolling={preventScrolling}
+                fitViewOptions={{ padding: isMobile ? 0.2 : 0.5 }}
+                style={{ touchAction: 'none' }}
               >
-                <Controls />
-                <MiniMap
-                  nodeColor={(node) => {
-                    switch (node.type) {
-                      case 'selectorNode':
-                        return '#1565c0'; // Darker blue
-                      case 'processorNode':
-                        return '#7b1fa2'; // Darker purple
-                      case 'outputNode':
-                        return '#2e7d32'; // Darker green
-                      default:
-                        return '#616161'; // Darker gray
-                    }
-                  }}
-                  nodeStrokeColor={(node) => {
-                    switch (node.type) {
-                      case 'selectorNode':
-                        return '#90caf9'; // Light blue
-                      case 'processorNode':
-                        return '#ce93d8'; // Light purple
-                      case 'outputNode':
-                        return '#a5d6a7'; // Light green
-                      default:
-                        return '#bdbdbd';
-                    }
-                  }}
-                  maskColor="rgba(0, 0, 0, 0.1)"
-                />
-                <Background
-                  variant="dots"
-                  gap={16}
-                  size={1}
-                />
+                <Background />
+                <Controls showInteractive={!isMobile} />
+                {!isMobile && <MiniMap />}
               </ReactFlow>
             </Box>
           </Box>

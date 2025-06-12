@@ -57,7 +57,7 @@ describe('SpiderList Component', () => {
 
     // Wait for the spiders to be loaded
     await waitFor(() => {
-      expect(axios.get).toHaveBeenCalledWith('http://localhost:8000/api/v1/spiders/');
+      expect(axios.get).toHaveBeenCalledWith('http://localhost:8001/api/v1/spiders/');
     });
 
     // Check if spider names are displayed
@@ -103,7 +103,7 @@ describe('SpiderList Component', () => {
 
     // Check if axios.post was called with the correct URL
     await waitFor(() => {
-      expect(axios.post).toHaveBeenCalledWith('http://localhost:8000/api/v1/spiders/1/run');
+      expect(axios.post).toHaveBeenCalledWith('http://localhost:8001/api/v1/spiders/1/run');
     });
 
     // Check if axios.get was called again to refresh the list
@@ -138,7 +138,7 @@ describe('SpiderList Component', () => {
 
     // Check if axios.delete was called with the correct URL
     await waitFor(() => {
-      expect(axios.delete).toHaveBeenCalledWith('http://localhost:8000/api/v1/spiders/1');
+      expect(axios.delete).toHaveBeenCalledWith('http://localhost:8001/api/v1/spiders/1');
     });
   });
 });

@@ -79,7 +79,7 @@ const SpiderMonitor = () => {
   useEffect(() => {
     if (id) {
       // In a real implementation, connect to the WebSocket API
-      // ws.current = new WebSocket(`ws://localhost:8000/api/v1/ws/spider/${id}`);
+      // ws.current = new WebSocket(`ws://localhost:8001/api/v1/ws/spider/${id}`);
 
       // ws.current.onopen = () => {
       //   console.log('WebSocket connected');

@@ -53,8 +53,15 @@ const statusColors = {
   default: { bg: '#f5f5f5', color: '#757575' }   // Default for any unknown status
 };
 
+const defaultStats = {
+  totalSpiders: 0,
+  runningSpiders: 0,
+  completedJobs: 0,
+  itemsScraped: 0
+};
+
 const Dashboard = () => {
-  const [stats, setStats] = useState(mockStats);
+  const [stats, setStats] = useState(defaultStats);
   const [recentJobs, setRecentJobs] = useState(mockRecentJobs);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,12 +73,14 @@ const Dashboard = () => {
     try {
       setRefreshing(true);
       const statsData = await getDashboardStats();
-      setStats(statsData);
+      setStats(statsData || defaultStats);
 
       const jobsData = await getRecentJobs(5);
-      setRecentJobs(jobsData);
+      setRecentJobs(jobsData || []);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      setStats(defaultStats);
+      setRecentJobs([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -309,9 +318,9 @@ const Dashboard = () => {
                 component="div"
                 fontWeight="500"
               >
-                {isSmallScreen && stats.itemsScraped > 9999
-                  ? `${Math.floor(stats.itemsScraped/1000)}k`
-                  : stats.itemsScraped.toLocaleString()}
+                {isSmallScreen && (stats?.itemsScraped || 0) > 9999
+                  ? `${Math.floor((stats?.itemsScraped || 0)/1000)}k`
+                  : (stats?.itemsScraped || 0).toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
