@@ -1,8 +1,8 @@
-// Base API URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api/v1';
-
-// Store the auth token in localStorage
+// Base API URL and configuration
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 const TOKEN_KEY = 'pirat_auth_token';
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000;
 
 /**
  * Auth helper functions
@@ -13,15 +13,23 @@ export const removeToken = () => localStorage.removeItem(TOKEN_KEY);
 export const isAuthenticated = () => !!getToken();
 
 /**
- * Generic fetch wrapper with error handling
+ * Delay helper for retry mechanism
  */
-async function fetchAPI(endpoint, options = {}) {
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Enhanced fetch wrapper with retry logic and better error handling
+ */
+async function fetchAPI(endpoint, options = {}, retryCount = 0) {
   const url = `${API_BASE_URL}/${endpoint}`;
 
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
+    credentials: 'include',
+    mode: 'cors',
   };
 
   // Add auth token to headers if available
@@ -30,42 +38,73 @@ async function fetchAPI(endpoint, options = {}) {
     defaultOptions.headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, { ...defaultOptions, ...options });
+  try {
+    const response = await fetch(url, { ...defaultOptions, ...options });
 
-  if (!response.ok) {
-    // If we get a 401 Unauthorized, clear the token
+    // Handle various HTTP status codes
     if (response.status === 401) {
       removeToken();
+      throw new Error('Unauthorized - Please log in again');
     }
 
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `API error: ${response.status}`);
-  }
+    if (response.status === 403) {
+      throw new Error('Forbidden - You do not have permission to access this resource');
+    }
 
-  return response.json();
+    if (response.status === 404) {
+      throw new Error('Resource not found');
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    // Network errors or parsing errors
+    if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+      if (retryCount < MAX_RETRIES) {
+        await delay(RETRY_DELAY * (retryCount + 1));
+        return fetchAPI(endpoint, options, retryCount + 1);
+      }
+    }
+
+    throw error;
+  }
 }
 
 /**
  * Authentication API functions
  */
-export const login = (credentials) => {
-  // Create URLSearchParams for form data submission (required by OAuth2PasswordRequestForm)
-  const formData = new URLSearchParams();
-  formData.append('username', credentials.username);
-  formData.append('password', credentials.password);
+export const login = async (credentials) => {
+  try {
+    const formData = new URLSearchParams();
+    formData.append('username', credentials.username);
+    formData.append('password', credentials.password);
 
-  return fetchAPI('auth/login', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData,
-  }).then(data => {
+    const data = await fetchAPI('auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData,
+    });
+
     if (data.access_token) {
       setToken(data.access_token);
     }
     return data;
-  });
+  } catch (error) {
+    // Enhanced error handling for login
+    if (error.message.includes('NetworkError') || error.message === 'Failed to fetch') {
+      throw new Error('Unable to connect to the server. Please check your internet connection.');
+    }
+    if (error.message.includes('401')) {
+      throw new Error('Invalid username or password');
+    }
+    throw error;
+  }
 };
 
 export const signup = (userData) => {
